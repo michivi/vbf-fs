@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    cabal-file:
+      size: 1769
+      sha256: 5da7f41abefcd36a841e8abc2963cc53a15081caa44da5b94fc119cf3433f1c1
+    name: HFuse
+    version: 0.2.5.0
+    git: https://github.com/michivi/hfuse.git
+    pantry-tree:
+      size: 469
+      sha256: 8f26d73bfe8dd841d057a9937fca82b37977ad819a2fb33dab88768f9dbbf778
+    commit: c305f26b426680d74b8567ddda5cc10b6db56a03
+  original:
+    git: https://github.com/michivi/hfuse.git
+    commit: c305f26b426680d74b8567ddda5cc10b6db56a03
 snapshots:
 - completed:
     size: 532380

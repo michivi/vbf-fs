@@ -2,3 +2,8 @@ resolver: lts-16.15
 
 packages:
   - .
+
+extra-deps:
+  - git: https://github.com/michivi/hfuse.git
+    commit: c305f26b426680d74b8567ddda5cc10b6db56a03
+    # nix-sha256: 1myypdcnsmrjdc1mb8cb8gal5s7vya17z798y6rpnlv2nks154x6

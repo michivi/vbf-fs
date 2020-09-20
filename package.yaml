@@ -16,6 +16,13 @@ description: >
 
 dependencies:
   - base >= 4.7 && < 5
+  - binary
+  - bytestring
+  - cryptohash-md5
+  - fused-effects
+  - HFuse
+  - optparse-applicative
+  - vector
 
 ghc-options:
   - -Wall
