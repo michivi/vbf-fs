@@ -1,0 +1,46 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 4d8ec39cd5304e13ef08ec0107d82be5d0c5f76fea7c6b78575c1b86a1918025
+
+name:           vbf-fs
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/michivi/vbf-fs#readme>
+homepage:       https://github.com/michivi/vbf-fs#readme
+bug-reports:    https://github.com/michivi/vbf-fs/issues
+author:         Michivi
+maintainer:     webmaster@michivi.com
+copyright:      2020 Michivi
+license:        MIT
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/michivi/vbf-fs
+
+library
+  other-modules:
+      Paths_vbf_fs
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+executable vbf
+  main-is: Main.hs
+  other-modules:
+      Paths_vbf_fs
+  hs-source-dirs:
+      app/vbf
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , vbf-fs
+  default-language: Haskell2010
