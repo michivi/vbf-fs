@@ -6,6 +6,7 @@ import           Data.VBF
 import           Control.Exception
 import           Data.ByteString                ( ByteString )
 import           Data.Typeable
+import           Data.Vector
 
 data VBFContent = VBFContent
     { vbfcEntries :: ![VBFEntry] }
@@ -15,14 +16,16 @@ data VBFEntry = VBFEntry
     { vbfeOffset :: !VBFSizeUnit
     , vbfeSize :: !VBFSizeUnit
     , vbfeArchivePath :: !FilePath
-    , vbfeArchivePathHash :: !VBFHash }
+    , vbfeArchivePathHash :: !VBFHash
+    , vbfeBlocks :: !(Vector VBFBlockSize) }
     deriving (Eq, Show)
 
 data VBFFileInfo = VBFFileInfo
     { vbfiHeaderLength :: !VBFHeaderSize
     , vbfiEntries :: ![VBFFileEntry]
     , vbfiHashes :: ![VBFHash]
-    , vbfiNameTable :: !ByteString }
+    , vbfiNameTable :: !ByteString
+    , vbfiBlocks :: !(Vector VBFBlockSize) }
 
 data VBFFileEntry = VBFFileEntry
     { vbffeStartBlock :: !VBFBlockIndex

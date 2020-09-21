@@ -4,6 +4,7 @@ import           Data.ByteString
 import           Data.Word
 
 type VBFBlockIndex = Word32
+type VBFBlockSize = Word16
 
 type VBFHeaderSize = Word32
 
