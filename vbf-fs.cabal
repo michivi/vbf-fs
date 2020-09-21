@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3f3945efa2aee28dd13edac2c6ab0ebf39ed107fc120deed2f54adc9a01c7755
+-- hash: 8fc20399577d4b7cd7d3f84b4ceca66393fe6f2486498b6b6deedeae1713bdf7
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -27,6 +27,7 @@ library
   exposed-modules:
       Control.Effect.VBFFS
       Control.Effect.VBFFS.Internal
+      Control.Effect.VBFFS.Tree
       Data.VBF
   other-modules:
       Paths_vbf_fs
@@ -38,7 +39,9 @@ library
     , base >=4.7 && <5
     , binary
     , bytestring
+    , containers
     , cryptohash-md5
+    , filepath
     , fused-effects
     , optparse-applicative
     , pure-zlib
@@ -57,7 +60,9 @@ executable vbf
     , base >=4.7 && <5
     , binary
     , bytestring
+    , containers
     , cryptohash-md5
+    , filepath
     , fused-effects
     , optparse-applicative
     , pure-zlib

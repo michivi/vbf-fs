@@ -18,6 +18,20 @@ packages:
   original:
     git: https://github.com/michivi/hfuse.git
     commit: c305f26b426680d74b8567ddda5cc10b6db56a03
+- completed:
+    cabal-file:
+      size: 3487
+      sha256: 5a1cdf87bf3079b7d3abace1f94eeb3c597c687a38a08ee2908783e609271467
+    name: pure-zlib
+    version: 0.6.7
+    git: https://github.com/GaloisInc/pure-zlib.git
+    pantry-tree:
+      size: 2552
+      sha256: 5218eb6a763dd8683935791e40646e1e8704c18cbb6882db7a1ceca32b568a50
+    commit: 813b6d3160994feee3e0b094e214eed0d5159e92
+  original:
+    git: https://github.com/GaloisInc/pure-zlib.git
+    commit: 813b6d3160994feee3e0b094e214eed0d5159e92
 snapshots:
 - completed:
     size: 532380

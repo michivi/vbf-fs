@@ -2,10 +2,12 @@ module Main where
 
 import           Control.Effect.VBFFS
 import           Control.Effect.VBFFS.Internal
+import           Control.Effect.VBFFS.Tree
 
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
 import           Data.Function
+import           Data.Tree
 import           Options.Applicative
 import           System.Exit
 import           System.IO
@@ -15,6 +17,7 @@ data DumpFormat = ClearTextDump | TsvDump deriving (Eq, Read, Show)
 data VBFTool
     = DumpVBFInfo FilePath DumpFormat
     | ExtractEntry FilePath FilePath (Maybe FilePath) ExtractionMode
+    | TreeVBF FilePath
     deriving (Eq, Show)
 
 dumpVbfInfo :: Parser VBFTool
@@ -44,6 +47,9 @@ extractEntry =
              RawExtraction
              (long "raw" <> short 'r' <> help "Raw extract")
 
+treeVbf :: Parser VBFTool
+treeVbf = TreeVBF <$> argument str (metavar "ARCHIVE")
+
 vbfTool :: Parser VBFTool
 vbfTool = subparser
   (  command "dump"
@@ -52,6 +58,8 @@ vbfTool = subparser
        "extract"
        (info extractEntry (progDesc "Extract an entry within the VBF archive")
        )
+  <> command "tree"
+             (info treeVbf (progDesc "Print a tree of the archive content"))
   )
 
 run :: VBFTool -> IO ()
@@ -78,6 +86,10 @@ run (DumpVBFInfo path TsvDump) = do
       ++ show (vbfUncompressedEntrySize entry)
       ++ "\t"
       ++ show (vbfeOffset entry)
+run (TreeVBF path) = do
+  ct <- vbfContent path
+  let tr = vbfContentTree ct
+  putStrLn $ drawTree (vbfNodeName <$> tr)
 run (ExtractEntry archivePath entryPath outputPath mode) = do
   ct <- vbfContent archivePath
   let notFound = do
