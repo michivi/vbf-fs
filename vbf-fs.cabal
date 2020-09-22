@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8fc20399577d4b7cd7d3f84b4ceca66393fe6f2486498b6b6deedeae1713bdf7
+-- hash: 47f568e4405055b75845126f932409cb19a7759046b3b6826dc389814f7843dd
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -25,25 +25,24 @@ source-repository head
 
 library
   exposed-modules:
-      Control.Effect.VBFFS
-      Control.Effect.VBFFS.Internal
-      Control.Effect.VBFFS.Tree
-      Data.VBF
+      System.FileSystem.VBF
+      System.FileSystem.VBF.Archive
+      System.FileSystem.VBF.Data
+      System.FileSystem.VBF.Internal
+      System.FileSystem.VBF.Tree
   other-modules:
       Paths_vbf_fs
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
   build-depends:
-      HFuse
-    , base >=4.7 && <5
+      base >=4.7 && <5
     , binary
     , bytestring
     , containers
     , cryptohash-md5
     , filepath
     , fused-effects
-    , optparse-applicative
     , pure-zlib
     , vector
   default-language: Haskell2010
@@ -56,8 +55,7 @@ executable vbf
       app/vbf
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      HFuse
-    , base >=4.7 && <5
+      base >=4.7 && <5
     , binary
     , bytestring
     , containers
@@ -66,6 +64,30 @@ executable vbf
     , fused-effects
     , optparse-applicative
     , pure-zlib
+    , vbf-fs
+    , vector
+  default-language: Haskell2010
+
+executable vbf-fs
+  main-is: Main.hs
+  other-modules:
+      Paths_vbf_fs
+  hs-source-dirs:
+      app/vbf-fs
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      HFuse
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , containers
+    , cryptohash-md5
+    , directory
+    , filepath
+    , fused-effects
+    , optparse-applicative
+    , pure-zlib
+    , unix
     , vbf-fs
     , vector
   default-language: Haskell2010

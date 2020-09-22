@@ -1,8 +1,9 @@
-module Main where
+module Main
+  ( main
+  )
+where
 
-import           Control.Effect.VBFFS
-import           Control.Effect.VBFFS.Internal
-import           Control.Effect.VBFFS.Tree
+import           System.FileSystem.VBF
 
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
@@ -16,7 +17,7 @@ data DumpFormat = ClearTextDump | TsvDump deriving (Eq, Read, Show)
 
 data VBFTool
     = DumpVBFInfo FilePath DumpFormat
-    | ExtractEntry FilePath FilePath (Maybe FilePath) ExtractionMode
+    | ExtractEntry FilePath FilePath (Maybe FilePath) ReadingMode (Maybe Integer) (Maybe Integer)
     | TreeVBF FilePath
     deriving (Eq, Show)
 
@@ -46,6 +47,22 @@ extractEntry =
     <*> flag Decompression
              RawExtraction
              (long "raw" <> short 'r' <> help "Raw extract")
+    <*> option
+          (optional auto)
+          (  long "skip"
+          <> short 's'
+          <> metavar "SKIP_BYTES"
+          <> value Nothing
+          <> help "Number of bytes to skip"
+          )
+    <*> option
+          (optional auto)
+          (  long "length"
+          <> short 'l'
+          <> metavar "BYTES"
+          <> value Nothing
+          <> help "Number of bytes to extract"
+          )
 
 treeVbf :: Parser VBFTool
 treeVbf = TreeVBF <$> argument str (metavar "ARCHIVE")
@@ -83,22 +100,28 @@ run (DumpVBFInfo path TsvDump) = do
       ++ "\t"
       ++ show (vbfeSize entry)
       ++ "\t"
-      ++ show (vbfUncompressedEntrySize entry)
+      ++ show (vbfeCompressedSize entry)
       ++ "\t"
       ++ show (vbfeOffset entry)
 run (TreeVBF path) = do
   ct <- vbfContent path
   let tr = vbfContentTree ct
-  putStrLn $ drawTree (vbfNodeName <$> tr)
-run (ExtractEntry archivePath entryPath outputPath mode) = do
+  putStrLn $ drawTree (vbfNodeTagName <$> tr)
+run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
   ct <- vbfContent archivePath
   let notFound = do
         hPutStrLn stderr ("File '" ++ entryPath ++ "' not found.")
         exitWith (ExitFailure 1)
+      erg _ Nothing Nothing = EntireFile
+      erg maxlen off len =
+        PartialFile (maybe 0 fromIntegral off) (maybe maxlen fromIntegral len)
       goExtract ei = do
         let withOutput =
               maybe ((&) stdout) (\fp -> withBinaryFile fp WriteMode) outputPath
-        vbfExtractEntry archivePath ei mode
+        vbfWithfExtractedEntry archivePath
+                               ei
+                               (erg (vbfeSize ei) mboff mblen)
+                               mode
           $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
   maybe notFound
         goExtract

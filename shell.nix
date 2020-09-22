@@ -35,7 +35,8 @@ in
         ];
     
     shellHook = ''
-      VBFFS_APP=dist-newstyle/build/x86_64-linux/ghc-8.8.4/vbf-fs-0.1.0.0/x/vbf/build/vbf/vbf
+      VBF_APP=dist-newstyle/build/x86_64-linux/ghc-8.8.4/vbf-fs-0.1.0.0/x/vbf/build/vbf/vbf
+      VBFFS_APP=dist-newstyle/build/x86_64-linux/ghc-8.8.4/vbf-fs-0.1.0.0/x/vbf-fs/build/vbf-fs/vbf-fs
 
       alias "b"="cabal new-build"
       alias "c"="hpack && cabal new-configure"
@@ -43,7 +44,8 @@ in
       alias "f"="(find app -name '*.hs' ; find src -name '*.hs') | xargs -n1 brittany --write-mode=inplace"
       alias "l"="hlint -h .hlint.yaml ."
       alias "lr"="hlint -h .hlint.yaml --report ."
-      alias "r"="$VBFFS_APP"
+      alias "r"="$VBF_APP"
+      alias "rf"="$VBFFS_APP"
     '';
 
     exactDeps = true;
