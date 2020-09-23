@@ -5,6 +5,8 @@ where
 
 import           System.FileSystem.VBF
 
+import           Control.Concurrent
+import           Control.Exception
 import qualified Data.ByteString.Char8         as B
 import qualified Data.ByteString.Lazy          as BSL
 import           Data.List
@@ -22,16 +24,25 @@ import           System.Fuse
 
 data VBFFSExecutionMode = Background | Foreground deriving (Eq, Show)
 
-data VBFFSCommand = MountArchive FilePath FilePath VBFFSExecutionMode
+data VBFFSVerbosity = Production | Verbose deriving (Eq, Show)
+
+data VBFFSCommand = MountArchive VBFFSVerbosity FilePath FilePath VBFFSExecutionMode
+
+data VerboseOutput
+    = ArchiveOpening FilePath
+    | EntryReading FilePath FileOffset ByteCount
 
 data VBFFSContext = VBFFSContext FilePath VBFContent VBFTree
 
-data VBFFSHandle = VBFFSHandle VBFEntry Handle
+data VBFFSHandle = VBFFSHandle VBFEntry (MVar Handle)
 
 mountArchive :: Parser VBFFSCommand
 mountArchive =
   MountArchive
-    <$> argument str (metavar "ARCHIVE" <> help "Path to the VBF archive")
+    <$> flag Production
+             Verbose
+             (long "verbose" <> short 'v' <> help "Run in verbose mode")
+    <*> argument str (metavar "ARCHIVE" <> help "Path to the VBF archive")
     <*> argument str (metavar "MOUNTPOINT" <> help "Path to the mount point")
     <*> flag Background
              Foreground
@@ -51,25 +62,35 @@ fuseOpts :: VBFFSExecutionMode -> [String]
 fuseOpts Foreground = ["-f"]
 fuseOpts Background = []
 
-run :: VBFFSCommand -> IO ()
-run (MountArchive arcPath mntPath execMode) = do
-  prog                <- getProgName
+logCommand :: VBFFSVerbosity -> VerboseOutput -> IO ()
+logCommand Production _                   = return ()
+logCommand Verbose    (ArchiveOpening fp) = logMsg ["Opening archive", fp]
+logCommand Verbose (EntryReading fp off bc) =
+  logMsg ["Reading entry", fp, show off, show bc]
 
+logMsg :: [String] -> IO ()
+logMsg parts = hPutStrLn stderr (intercalate "\t" parts) >> hFlush stderr
+
+run :: VBFFSCommand -> IO ()
+run (MountArchive verbosity arcPath mntPath execMode) = do
+  prog                <- getProgName
   absoluteArchivePath <- makeAbsolute arcPath
 
-  ct                  <- vbfContent arcPath
+  logCommand verbosity (ArchiveOpening absoluteArchivePath)
+  ct <- vbfContent arcPath
+
   let tr   = vbfContentTree ct
       ctxt = VBFFSContext absoluteArchivePath ct tr
 
   let args = [mntPath] <> fuseOpts execMode
-  fuseRun prog args (vbfFSOps ctxt) defaultExceptionHandler
+  fuseRun prog args (vbfFSOps verbosity ctxt) defaultExceptionHandler
 
-vbfFSOps :: VBFFSContext -> FuseOperations VBFFSHandle
-vbfFSOps ctxt@(VBFFSContext _ ct tr) = defaultFuseOps
+vbfFSOps :: VBFFSVerbosity -> VBFFSContext -> FuseOperations VBFFSHandle
+vbfFSOps verbosity ctxt@(VBFFSContext _ ct tr) = defaultFuseOps
   { fuseGetFileStat        = vbfGetFileStat tr
   , fuseOpen               = vbfOpen ctxt
   , fuseRelease            = vbfRelease
-  , fuseRead               = vbfRead
+  , fuseRead               = vbfRead verbosity
   , fuseOpenDirectory      = vbfOpenDirectory tr
   , fuseReadDirectory      = vbfReadDirectory tr
   , fuseGetFileSystemStats = vbfGetFileSystemStats ct
@@ -159,25 +180,31 @@ vbfOpen (VBFFSContext arcPath ct tr) fp mode _ = case vbfFindPath tr fp of
       $ find ((== hash) . vbfeArchivePathHash) (vbfcEntries ct)
     _ -> return (Left eACCES)
  where
-  go entry = Right . VBFFSHandle entry <$> openBinaryFile arcPath ReadMode
+  go entry = bracketOnError (openBinaryFile arcPath ReadMode) hClose $ \hdl ->
+    do
+      hdlVar <- newMVar hdl
+      return $ Right (VBFFSHandle entry hdlVar)
 
 vbfRelease :: FilePath -> VBFFSHandle -> IO ()
-vbfRelease _ (VBFFSHandle _ hdl) = hClose hdl
+vbfRelease _ (VBFFSHandle _ hdlv) = withMVar hdlv hClose
 
 vbfRead
-  :: FilePath
+  :: VBFFSVerbosity
+  -> FilePath
   -> VBFFSHandle
   -> ByteCount
   -> FileOffset
   -> IO (Either Errno B.ByteString)
-vbfRead _ (VBFFSHandle entry hdl) byteCount offset =
-  Right
-    .   BSL.toStrict
-    <$> vbfReadEntryContentLazily
-          hdl
-          entry
-          (PartialFile (fromIntegral offset) (fromIntegral byteCount))
-          Decompression
+vbfRead verbosity fp (VBFFSHandle entry hdlv) byteCount offset =
+  withMVar hdlv $ \hdl -> do
+    logCommand verbosity (EntryReading fp offset byteCount)
+    Right
+      .   BSL.toStrict
+      <$> vbfReadEntryContentLazily
+            hdl
+            entry
+            (PartialFile (fromIntegral offset) (fromIntegral byteCount))
+            Decompression
 
 vbfGetFileSystemStats
   :: VBFContent -> String -> IO (Either Errno FileSystemStats)
