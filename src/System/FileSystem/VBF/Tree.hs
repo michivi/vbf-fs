@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.List
 import qualified Data.List.NonEmpty            as NonEmpty
 import           Data.Tree
+import qualified Data.Vector                   as Vector
 
 type VBFTree = Tree VBFNodeTag
 
@@ -23,57 +24,53 @@ data VBFNodeTag
     | IntermediateTag !BSL.ByteString
     deriving (Eq, Show)
 
-data VBFNodeBuildingBlock
-  = DirectoryBlock !VBFEntry !BSL.ByteString !BSL.ByteString
-  | FileBlock !VBFEntry !BSL.ByteString
+data BuildingPiece
+  = BranchPiece !VBFEntry !BSL.ByteString !BSL.ByteString
+  | LeafPiece !VBFEntry !BSL.ByteString
     deriving (Eq, Show)
 
 vbfRootLabel :: BSL.ByteString
 vbfRootLabel = ""
 
-toBuildingBlock :: BSL.ByteString -> VBFEntry -> VBFNodeBuildingBlock
-toBuildingBlock relPath e = matchBlock cur nxt
+toBuildingPiece :: BSL.ByteString -> VBFEntry -> BuildingPiece
+toBuildingPiece relPath e = matchPiece cur nxt
  where
-  (cur, nxt) = BSL.span (/= vbfPathSeparator) relPath
-  matchBlock c n | BSL.length nxt < 1 = FileBlock e c
-                 | otherwise          = DirectoryBlock e c (BSL.drop 1 n)
+  (cur, nxt) = BSL.break (== vbfPathSeparator) relPath
+  matchPiece c n | BSL.length nxt < 1 = LeafPiece e c
+                 | otherwise          = BranchPiece e c (BSL.drop 1 n)
 
-buildingBlockName :: VBFNodeBuildingBlock -> BSL.ByteString
-buildingBlockName (DirectoryBlock _ c _) = c
-buildingBlockName (FileBlock _ c       ) = c
+pieceName :: BuildingPiece -> BSL.ByteString
+pieceName (BranchPiece _ c _) = c
+pieceName (LeafPiece _ c    ) = c
 
-buildingBlockSubPath :: VBFNodeBuildingBlock -> BSL.ByteString
-buildingBlockSubPath (DirectoryBlock _ _ n) = n
-buildingBlockSubPath (FileBlock _ _       ) = BSL.empty
+pieceSubPath :: BuildingPiece -> BSL.ByteString
+pieceSubPath (BranchPiece _ _ n) = n
+pieceSubPath (LeafPiece _ _    ) = BSL.empty
 
-buildingBlockEntry :: VBFNodeBuildingBlock -> VBFEntry
-buildingBlockEntry (DirectoryBlock e _ _) = e
-buildingBlockEntry (FileBlock e _       ) = e
+pieceEntry :: BuildingPiece -> VBFEntry
+pieceEntry (BranchPiece e _ _) = e
+pieceEntry (LeafPiece e _    ) = e
 
 vbfContentTree :: VBFContent -> VBFTree
-vbfContentTree content = buildTree (vbfcEntries content)
+vbfContentTree content = buildTree (Vector.toList $ vbfcEntries content)
 
 buildTree :: [VBFEntry] -> VBFTree
 buildTree ents = Node (IntermediateTag vbfRootLabel)
                       (buildChildren sortedBBlocks)
  where
   sortedBBlocks =
-    (toBuildingBlock <$> vbfeArchivePath <*> id) <$> sortOn vbfeArchivePath ents
+    (toBuildingPiece <$> vbfeArchivePath <*> id) <$> sortOn vbfeArchivePath ents
 
   buildChildren sbbs =
-    let
-      subGroups = NonEmpty.groupWith buildingBlockName sbbs
-      toTree ((FileBlock e n) NonEmpty.:| _) =
-        Node (VBFEntryTag n (vbfeSize e) (vbfeArchivePathHash e)) []
-      toTree dirs@((DirectoryBlock _ n _) NonEmpty.:| _) =
-        Node (IntermediateTag n) $ buildChildren
-          (NonEmpty.toList
-            ((toBuildingBlock <$> buildingBlockSubPath <*> buildingBlockEntry)
-            <$> dirs
-            )
-          )
-    in
-      toTree <$> subGroups
+    let subGroups = NonEmpty.groupWith pieceName sbbs
+        toTree ((LeafPiece e n) NonEmpty.:| _) =
+            Node (VBFEntryTag n (vbfeSize e) (vbfeArchivePathHash e)) []
+        toTree dirs@((BranchPiece _ n _) NonEmpty.:| _) =
+            Node (IntermediateTag n) $ buildChildren
+              (NonEmpty.toList
+                ((toBuildingPiece <$> pieceSubPath <*> pieceEntry) <$> dirs)
+              )
+    in  toTree <$> subGroups
 
 vbfNodeName :: VBFTree -> String
 vbfNodeName (Node tag _) = vbfNodeTagName tag

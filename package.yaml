@@ -22,8 +22,8 @@ dependencies:
   - cryptohash-md5
   - filepath
   - fused-effects
-  - pure-zlib
   - vector
+  - zlib
 
 ghc-options:
   - -Wall

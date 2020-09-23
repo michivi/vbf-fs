@@ -32,6 +32,9 @@ in
 
             # Linters and checkers.
             buildPackages.haskellPackages.hlint
+
+            # Miscellaneous.
+            buildPackages.gv
         ];
     
     shellHook = ''

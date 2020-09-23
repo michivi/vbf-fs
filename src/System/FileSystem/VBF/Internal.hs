@@ -33,20 +33,22 @@ data VBFBlock
 data VBFContent = VBFContent
     { vbfcHeaderLength :: !VBFHeaderSize
     , vbfcBlockCount :: !VBFBlockIndex
-    , vbfcEntries :: ![VBFEntry] }
+    , vbfcEntries :: (Vector VBFEntry) }
     deriving (Eq, Show)
 
 data VBFEntry = VBFEntry
     { vbfeOffset :: !VBFSizeUnit
     , vbfeSize :: !VBFSizeUnit
-    , vbfeCompressedSize :: !VBFSizeUnit
+    , vbfeCompressedSize :: VBFSizeUnit
     , vbfeArchivePath :: !BSL.ByteString
     , vbfeArchivePathHash :: !VBFHash
-    , vbfeBlocks :: !(Vector (VBFSizeUnit, VBFBlock)) }
+    , vbfeBlocks :: (Vector (VBFSizeUnit, VBFBlock)) }
     deriving (Eq, Show)
 
 data VBFException
     = InvalidSignatureException
+    | CorruptedHeaderException
+    | HeaderTooSmallException
     | InvalidHeaderException
     | InvalidBlockException VBFBlockError
     deriving (Eq, Show, Typeable)

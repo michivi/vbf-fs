@@ -17,9 +17,8 @@ import           System.FileSystem.VBF.Data
 import           System.FileSystem.VBF.Internal
 import           System.FileSystem.VBF.Tree
 
-import           Control.Exception
 import qualified Data.ByteString.Lazy.Char8    as BSL
-import qualified Data.Vector
+import qualified Data.Vector                   as Vector
 import           Data.Word
 import           System.IO               hiding ( hGetContents )
 
@@ -53,15 +52,12 @@ vbfReadEntryContentLazily hdl entry rg RawExtraction = do
   (ctOff, ctLen)  = fixRange maxLength rg
   actualVbfOffset = fromIntegral (vbfEntryOff + ctOff)
 vbfReadEntryContentLazily hdl entry rg Decompression = do
-  archivedBlocks  <- traverse fetchBlock blockInfos
-  processedBlocks <- either
-    throwIO
-    return
-    (Data.Vector.mapM (uncurry processBlock) archivedBlocks)
+  archivedBlocks <- traverse fetchBlock blockInfos
+  let processedBlocks = Vector.map (uncurry processBlock) archivedBlocks
   return
     $ BSL.take (fromIntegral ctLen)
     $ BSL.drop (fromIntegral skippedAlignedBytesCount)
-    $ BSL.concat (Data.Vector.toList processedBlocks)
+    $ BSL.concat (Vector.toList processedBlocks)
  where
   maxLength                = vbfeSize entry
   (ctOff, ctLen)           = fixRange maxLength rg
@@ -71,18 +67,16 @@ vbfReadEntryContentLazily hdl entry rg Decompression = do
   skippedAlignedBytesCount = ctOff `rem` vbfBlockSize
   blkCount =
     fromIntegral $ vbfEntryBlockCount (skippedAlignedBytesCount + ctLen)
-  blockInfos = Data.Vector.slice skippedBlkCount blkCount entryBlocks
+  blockInfos = Vector.slice skippedBlkCount blkCount entryBlocks
 
   fetchBlock (off, blk) = do
     hSeek hdl AbsoluteSeek (fromIntegral off)
     bs <- BSL.hGet hdl (fromIntegral $ vbfRawBlockSize vbfBlockSize blk)
     return (blk, bs)
 
-  decompressBlock =
-    either (Left . InvalidBlockException) Right . vbfBlockDecompress
-  processBlock PassthroughBlock      bs = Right bs
-  processBlock (PartialBlock    len) bs = Right (BSL.take (fromIntegral len) bs)
-  processBlock (CompressedBlock _  ) bs = decompressBlock bs
+  processBlock PassthroughBlock      bs = bs
+  processBlock (PartialBlock    len) bs = (BSL.take (fromIntegral len) bs)
+  processBlock (CompressedBlock _  ) bs = vbfBlockDecompress bs
 
 fixRange :: VBFSizeUnit -> EntryRange -> (VBFSizeUnit, VBFSizeUnit)
 fixRange maxLength EntireFile = (0, maxLength)
@@ -99,11 +93,11 @@ vbfContent fp = withBinaryFile fp ReadMode go
   toVBFContent fileInfo =
     let blocks    = vbfiBlocks fileInfo
         nameTable = vbfiNameTable fileInfo
-        entries   = zipWith (toVBFEntry blocks nameTable)
-                            (vbfiEntries fileInfo)
-                            (vbfiHashes fileInfo)
+        entries   = Vector.zipWith (toVBFEntry blocks nameTable)
+                                   (vbfiEntries fileInfo)
+                                   (vbfiHashes fileInfo)
     in  VBFContent { vbfcHeaderLength = vbfiHeaderLength fileInfo
-                   , vbfcBlockCount   = fromIntegral (Data.Vector.length blocks)
+                   , vbfcBlockCount   = fromIntegral (Vector.length blocks)
                    , vbfcEntries      = entries
                    }
 
@@ -114,20 +108,20 @@ vbfContent fp = withBinaryFile fp ReadMode go
         entryOffset       = vbffeOffset entry
         entryStartBlock   = vbffeStartBlock entry
         entryBlockCount   = vbfEntryBlockCount (vbffeBytes entry)
-        entryBlockLengths = Data.Vector.slice (fromIntegral entryStartBlock)
-                                              (fromIntegral entryBlockCount)
-                                              blocks
+        entryBlockLengths = Vector.slice (fromIntegral entryStartBlock)
+                                         (fromIntegral entryBlockCount)
+                                         blocks
         entrySize         = vbffeBytes entry
         unalignedBlockLen = fromIntegral (entrySize `rem` vbfBlockSize)
-        entryBlocks       = Data.Vector.imap
+        entryBlocks       = Vector.imap
           (toVBFBlock (fromIntegral $ entryBlockCount - 1) unalignedBlockLen)
           entryBlockLengths
         entryBlockOffsets =
-            Data.Vector.scanl (+) entryOffset
+            Vector.scanl' (+) entryOffset
               $   fromIntegral
               .   vbfRawBlockSize vbfBlockSize
               <$> entryBlocks
-        entryBlocksWithOffset = Data.Vector.zip entryBlockOffsets entryBlocks
+        entryBlocksWithOffset = Vector.zip entryBlockOffsets entryBlocks
     in  VBFEntry
           { vbfeOffset          = entryOffset
           , vbfeSize            = entrySize
