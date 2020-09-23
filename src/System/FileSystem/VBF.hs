@@ -102,12 +102,13 @@ vbfContent fp = withBinaryFile fp ReadMode go
         entries   = zipWith (toVBFEntry blocks nameTable)
                             (vbfiEntries fileInfo)
                             (vbfiHashes fileInfo)
-    in  VBFContent { vbfcBlockCount = fromIntegral (Data.Vector.length blocks)
-                   , vbfcEntries    = entries
+    in  VBFContent { vbfcHeaderLength = vbfiHeaderLength fileInfo
+                   , vbfcBlockCount   = fromIntegral (Data.Vector.length blocks)
+                   , vbfcEntries      = entries
                    }
 
   toVBFEntry blocks nameTable entry hash =
-    let archivePath = BSL.unpack $ BSL.takeWhile
+    let archivePath = BSL.takeWhile
           (/= '\NUL')
           (BSL.drop (fromIntegral $ vbffeNameOffset entry) nameTable)
         entryOffset       = vbffeOffset entry

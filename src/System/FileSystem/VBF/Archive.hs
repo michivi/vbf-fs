@@ -100,7 +100,7 @@ vbfArchiveFileInfo hdl = do
                            , vbffeOffset     = offset
                            , vbffeNameOffset = nameOffset
                            }
-  getNameTableLength = do
+  getNameTable = do
     nameTableLength <- getWord32le
     getLazyByteString (fromIntegral nameTableLength - 4)
   getBlock       = getWord16le
@@ -116,7 +116,7 @@ vbfArchiveFileInfo hdl = do
 
     hashes      <- replicateM numFiles getHash
     fileEntries <- replicateM numFiles getFileEntry
-    nameTable   <- getNameTableLength
+    nameTable   <- getNameTable
 
     let blockCount =
           sum (fromIntegral . vbfEntryBlockCount . vbffeBytes <$> fileEntries)

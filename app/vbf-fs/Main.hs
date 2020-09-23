@@ -8,7 +8,7 @@ import           System.FileSystem.VBF
 import           Control.Concurrent
 import           Control.Exception
 import qualified Data.ByteString.Char8         as B
-import qualified Data.ByteString.Lazy          as BSL
+import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.List
 import           Data.Tree
 import           Foreign.C.Error
@@ -164,10 +164,12 @@ vbfReadDirectory tr fp = case vbfFindPath tr fp of
   Nothing          -> return $ Left eNOENT
   Just (Node _ cs) -> do
     ctxt <- getFuseContext
-    let systemDirs = [(".", dirStat ctxt), ("..", dirStat ctxt)]
-        toEntry (Node (IntermediateTag n  ) _) = (n, dirStat ctxt)
-        toEntry (Node (VBFEntryTag n len _) _) = (n, fileStat len ctxt)
-        entries = toEntry <$> cs
+    let
+      systemDirs = [(".", dirStat ctxt), ("..", dirStat ctxt)]
+      toEntry (Node (IntermediateTag n) _) = (BSL.unpack n, dirStat ctxt)
+      toEntry (Node (VBFEntryTag n len _) _) =
+        (BSL.unpack n, fileStat len ctxt)
+      entries = toEntry <$> cs
     return $ Right (systemDirs <> entries)
 
 vbfOpen

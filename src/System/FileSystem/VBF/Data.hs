@@ -16,3 +16,6 @@ type VBFHeaderSize = Word32
 type VBFSizeUnit = Word64
 
 type VBFHash = ByteString
+
+vbfPathSeparator :: Char
+vbfPathSeparator = '/'

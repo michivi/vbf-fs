@@ -20,17 +20,19 @@ where
 import           System.FileSystem.VBF.Data
 
 import           Control.Exception
+import qualified Data.ByteString.Lazy          as BSL
 import           Data.Typeable
 import           Data.Vector
 
 data VBFBlock
-    = CompressedBlock VBFBlockSize
-    | PartialBlock VBFBlockSize
+    = CompressedBlock !VBFBlockSize
+    | PartialBlock !VBFBlockSize
     | PassthroughBlock
     deriving (Eq, Show)
 
 data VBFContent = VBFContent
-    { vbfcBlockCount :: !VBFBlockIndex
+    { vbfcHeaderLength :: !VBFHeaderSize
+    , vbfcBlockCount :: !VBFBlockIndex
     , vbfcEntries :: ![VBFEntry] }
     deriving (Eq, Show)
 
@@ -38,7 +40,7 @@ data VBFEntry = VBFEntry
     { vbfeOffset :: !VBFSizeUnit
     , vbfeSize :: !VBFSizeUnit
     , vbfeCompressedSize :: !VBFSizeUnit
-    , vbfeArchivePath :: !FilePath
+    , vbfeArchivePath :: !BSL.ByteString
     , vbfeArchivePathHash :: !VBFHash
     , vbfeBlocks :: !(Vector (VBFSizeUnit, VBFBlock)) }
     deriving (Eq, Show)

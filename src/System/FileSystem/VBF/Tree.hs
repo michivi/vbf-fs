@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module System.FileSystem.VBF.Tree
   ( VBFNodeTag(..)
   , VBFTree
@@ -10,73 +11,73 @@ where
 import           System.FileSystem.VBF.Data
 import           System.FileSystem.VBF.Internal
 
-import           Control.Monad
+import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.List
 import qualified Data.List.NonEmpty            as NonEmpty
-import           Data.Maybe
 import           Data.Tree
-import           System.FilePath.Posix
 
 type VBFTree = Tree VBFNodeTag
 
 data VBFNodeTag
-    = VBFEntryTag String VBFSizeUnit VBFHash
-    | IntermediateTag String
-    deriving (Eq, Ord, Show)
+    = VBFEntryTag !BSL.ByteString !VBFSizeUnit !VBFHash
+    | IntermediateTag !BSL.ByteString
+    deriving (Eq, Show)
 
 data VBFNodeBuildingBlock
-    = VBFNodeBuildingBlock
-        { vbfnbbContextRevPath :: NonEmpty.NonEmpty FilePath
-        , vbfnbbLocalPath :: NonEmpty.NonEmpty FilePath
-        , vbfnbbLength :: VBFSizeUnit
-        , vbfnbbHash :: VBFHash }
-    deriving (Eq, Ord, Show)
+  = DirectoryBlock !VBFEntry !BSL.ByteString !BSL.ByteString
+  | FileBlock !VBFEntry !BSL.ByteString
+    deriving (Eq, Show)
 
-drillDownNode :: VBFNodeBuildingBlock -> Maybe VBFNodeBuildingBlock
-drillDownNode (VBFNodeBuildingBlock (crp NonEmpty.:| crps) (a NonEmpty.:| as) len hash)
-  = (\nas -> VBFNodeBuildingBlock (a NonEmpty.:| crp : crps) nas len hash)
-    <$> NonEmpty.nonEmpty as
-
-isLeafNode :: VBFNodeBuildingBlock -> Bool
-isLeafNode (VBFNodeBuildingBlock _ (_ NonEmpty.:| as) _ _) = null as
-
-vbfRootLabel :: String
+vbfRootLabel :: BSL.ByteString
 vbfRootLabel = ""
+
+toBuildingBlock :: BSL.ByteString -> VBFEntry -> VBFNodeBuildingBlock
+toBuildingBlock relPath e = matchBlock cur nxt
+ where
+  (cur, nxt) = BSL.span (/= vbfPathSeparator) relPath
+  matchBlock c n | BSL.length nxt < 1 = FileBlock e c
+                 | otherwise          = DirectoryBlock e c (BSL.drop 1 n)
+
+buildingBlockName :: VBFNodeBuildingBlock -> BSL.ByteString
+buildingBlockName (DirectoryBlock _ c _) = c
+buildingBlockName (FileBlock _ c       ) = c
+
+buildingBlockSubPath :: VBFNodeBuildingBlock -> BSL.ByteString
+buildingBlockSubPath (DirectoryBlock _ _ n) = n
+buildingBlockSubPath (FileBlock _ _       ) = BSL.empty
+
+buildingBlockEntry :: VBFNodeBuildingBlock -> VBFEntry
+buildingBlockEntry (DirectoryBlock e _ _) = e
+buildingBlockEntry (FileBlock e _       ) = e
 
 vbfContentTree :: VBFContent -> VBFTree
 vbfContentTree content = buildTree (vbfcEntries content)
 
 buildTree :: [VBFEntry] -> VBFTree
-buildTree ents = Node (IntermediateTag vbfRootLabel) (buildChildren entryPaths)
+buildTree ents = Node (IntermediateTag vbfRootLabel)
+                      (buildChildren sortedBBlocks)
  where
-  entryPaths = catMaybes
-    (sort
-      (   (   liftM3 (VBFNodeBuildingBlock (vbfRootLabel NonEmpty.:| []))
-          <$> (NonEmpty.nonEmpty . splitDirectories . vbfeArchivePath)
-          <*> (Just . vbfeSize)
-          <*> (Just . vbfeArchivePathHash)
-          )
-      <$> ents
-      )
-    )
-  buildChildren sps =
+  sortedBBlocks =
+    (toBuildingBlock <$> vbfeArchivePath <*> id) <$> sortOn vbfeArchivePath ents
+
+  buildChildren sbbs =
     let
-      subGroups = NonEmpty.groupWith (NonEmpty.head . vbfnbbContextRevPath)
-                                     (mapMaybe drillDownNode sps)
-      files = filter isLeafNode sps
-      nodeFromGroup grp = Node
-        (IntermediateTag . NonEmpty.head . vbfnbbContextRevPath $ NonEmpty.head
-          grp
-        )
-        (buildChildren $ NonEmpty.toList grp)
-      fileFromNode (VBFNodeBuildingBlock _ (n NonEmpty.:| _) len h) =
-        Node (VBFEntryTag n len h) []
+      subGroups = NonEmpty.groupWith buildingBlockName sbbs
+      toTree ((FileBlock e n) NonEmpty.:| _) =
+        Node (VBFEntryTag n (vbfeSize e) (vbfeArchivePathHash e)) []
+      toTree dirs@((DirectoryBlock _ n _) NonEmpty.:| _) =
+        Node (IntermediateTag n) $ buildChildren
+          (NonEmpty.toList
+            ((toBuildingBlock <$> buildingBlockSubPath <*> buildingBlockEntry)
+            <$> dirs
+            )
+          )
     in
-      concat [nodeFromGroup <$> subGroups, fileFromNode <$> files]
+      toTree <$> subGroups
 
 vbfNodeName :: VBFTree -> String
 vbfNodeName (Node tag _) = vbfNodeTagName tag
 
 vbfNodeTagName :: VBFNodeTag -> String
-vbfNodeTagName (VBFEntryTag n _ _) = n
-vbfNodeTagName (IntermediateTag n) = n
+vbfNodeTagName (VBFEntryTag n _ _) = BSL.unpack n
+vbfNodeTagName (IntermediateTag n) = BSL.unpack n

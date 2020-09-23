@@ -81,12 +81,14 @@ vbfTool = subparser
 
 run :: VBFTool -> IO ()
 run (DumpVBFInfo path ClearTextDump) = do
-  putStrLn $ "Files:"
   ct <- vbfContent path
+  putStrLn $ "Header size: " ++ show (vbfcHeaderLength ct)
+  putStrLn $ "Blocks: " ++ show (vbfcBlockCount ct)
+  putStrLn $ "Files:"
   for_ (vbfcEntries ct) $ \entry -> do
     putStrLn
       $  "- "
-      ++ vbfeArchivePath entry
+      ++ BSL.unpack (vbfeArchivePath entry)
       ++ " ("
       ++ show (vbfeSize entry)
       ++ "b at "
@@ -96,7 +98,7 @@ run (DumpVBFInfo path TsvDump) = do
   ct <- vbfContent path
   for_ (vbfcEntries ct) $ \entry -> do
     putStrLn
-      $  vbfeArchivePath entry
+      $  BSL.unpack (vbfeArchivePath entry)
       ++ "\t"
       ++ show (vbfeSize entry)
       ++ "\t"
@@ -123,9 +125,10 @@ run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
                                (erg (vbfeSize ei) mboff mblen)
                                mode
           $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
-  maybe notFound
-        goExtract
-        (find ((== entryPath) . vbfeArchivePath) (vbfcEntries ct))
+  maybe
+    notFound
+    goExtract
+    (find ((== entryPath) . BSL.unpack . vbfeArchivePath) (vbfcEntries ct))
 
 opts :: ParserInfo VBFTool
 opts = info (vbfTool <**> helper) idm
