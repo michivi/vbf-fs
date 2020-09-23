@@ -30,6 +30,8 @@ data VBFFSCommand = MountArchive VBFFSVerbosity FilePath FilePath VBFFSExecution
 
 data VerboseOutput
     = ArchiveOpening FilePath
+    | EntryOpening FilePath
+    | EntryClosing FilePath
     | EntryReading FilePath FileOffset ByteCount
 
 data VBFFSContext = VBFFSContext FilePath VBFContent VBFTree
@@ -65,6 +67,8 @@ fuseOpts Background = []
 logCommand :: VBFFSVerbosity -> VerboseOutput -> IO ()
 logCommand Production _                   = return ()
 logCommand Verbose    (ArchiveOpening fp) = logMsg ["Opening archive", fp]
+logCommand Verbose    (EntryOpening   fp) = logMsg ["Opening archive entry", fp]
+logCommand Verbose    (EntryClosing   fp) = logMsg ["Closing archive entry", fp]
 logCommand Verbose (EntryReading fp off bc) =
   logMsg ["Reading entry", fp, show off, show bc]
 
@@ -88,8 +92,8 @@ run (MountArchive verbosity arcPath mntPath execMode) = do
 vbfFSOps :: VBFFSVerbosity -> VBFFSContext -> FuseOperations VBFFSHandle
 vbfFSOps verbosity ctxt@(VBFFSContext _ ct tr) = defaultFuseOps
   { fuseGetFileStat        = vbfGetFileStat tr
-  , fuseOpen               = vbfOpen ctxt
-  , fuseRelease            = vbfRelease
+  , fuseOpen               = vbfOpen verbosity ctxt
+  , fuseRelease            = vbfRelease verbosity
   , fuseRead               = vbfRead verbosity
   , fuseOpenDirectory      = vbfOpenDirectory tr
   , fuseReadDirectory      = vbfReadDirectory tr
@@ -167,26 +171,31 @@ vbfReadDirectory tr fp = case vbfFindPath tr fp of
     return $ Right (systemDirs <> entries)
 
 vbfOpen
-  :: VBFFSContext
+  :: VBFFSVerbosity
+  -> VBFFSContext
   -> FilePath
   -> OpenMode
   -> OpenFileFlags
   -> IO (Either Errno VBFFSHandle)
-vbfOpen (VBFFSContext arcPath ct tr) fp mode _ = case vbfFindPath tr fp of
-  Nothing                              -> return (Left eNOENT)
-  Just (Node (IntermediateTag _   ) _) -> return (Left eISDIR)
-  Just (Node (VBFEntryTag _ _ hash) _) -> case mode of
-    ReadOnly -> maybe (return $ Left eNOENT) go
-      $ find ((== hash) . vbfeArchivePathHash) (vbfcEntries ct)
-    _ -> return (Left eACCES)
+vbfOpen verbosity (VBFFSContext arcPath ct tr) fp mode _ =
+  case vbfFindPath tr fp of
+    Nothing                              -> return (Left eNOENT)
+    Just (Node (IntermediateTag _   ) _) -> return (Left eISDIR)
+    Just (Node (VBFEntryTag _ _ hash) _) -> case mode of
+      ReadOnly -> maybe (return $ Left eNOENT) go
+        $ find ((== hash) . vbfeArchivePathHash) (vbfcEntries ct)
+      _ -> return (Left eACCES)
  where
   go entry = bracketOnError (openBinaryFile arcPath ReadMode) hClose $ \hdl ->
     do
+      logCommand verbosity (EntryOpening fp)
       hdlVar <- newMVar hdl
       return $ Right (VBFFSHandle entry hdlVar)
 
-vbfRelease :: FilePath -> VBFFSHandle -> IO ()
-vbfRelease _ (VBFFSHandle _ hdlv) = withMVar hdlv hClose
+vbfRelease :: VBFFSVerbosity -> FilePath -> VBFFSHandle -> IO ()
+vbfRelease verbosity fp (VBFFSHandle _ hdlv) = do
+  logCommand verbosity (EntryClosing fp)
+  withMVar hdlv hClose
 
 vbfRead
   :: VBFFSVerbosity
