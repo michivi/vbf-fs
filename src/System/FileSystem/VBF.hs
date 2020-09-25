@@ -1,8 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
+-----------------------------------------------------------------------------
+-- |
+-- Module      : System.FileSystem.VBF
+-- Description : VBF archive exploration
+--
+-- This module exposes the main library functions for VBF archive exploration.
+--
+-- A VBF file is a file archive used by various video games, such as Final
+-- Fantasy X HD remaster, to store their various assets (graphics, sounds,
+-- videos...).
+--
+-- This module has several functions that can be used to probe such archives
+-- and extract the files they contain.
+--
+-- Errors are represented as exceptions. Even though a pure version would have
+-- been preferrable, this is primarily a quick fun toy project, and some
+-- sacrifices were made.
+-----------------------------------------------------------------------------
 module System.FileSystem.VBF
   ( module System.FileSystem.VBF.Archive
   , module System.FileSystem.VBF.Data
-  , module System.FileSystem.VBF.Internal
   , module System.FileSystem.VBF.Tree
   , EntryRange(..)
   , ReadingMode(..)
@@ -14,7 +31,6 @@ where
 
 import           System.FileSystem.VBF.Archive
 import           System.FileSystem.VBF.Data
-import           System.FileSystem.VBF.Internal
 import           System.FileSystem.VBF.Tree
 
 import qualified Data.ByteString.Lazy.Char8    as BSL
@@ -22,14 +38,31 @@ import qualified Data.Vector                   as Vector
 import           Data.Word
 import           System.IO               hiding ( hGetContents )
 
-data EntryRange = EntireFile | PartialFile Word64 Word64 deriving (Eq, Show)
+-- | Range of bytes to extract.
+data EntryRange
+  = EntireFile
+  -- ^ The entire file should be extracted.
+  | PartialFile Word64 Word64
+  -- ^ Only the bytes from the specified offset and size in bytes should be
+  -- extracted.
+  deriving (Eq, Show)
 
-data ReadingMode = RawExtraction | Decompression deriving (Eq, Show)
+-- | VBF data reading mode.
+data ReadingMode
+  = RawExtraction
+  -- ^ Extract the entry file raw data as-is (compressed blocks are still
+  -- compressed).
+  | Decompression
+  -- ^ Extract the entry file and decompress compressed data block on-the-fly.
+  deriving (Eq, Show)
 
 decodeBlockLen :: VBFBlockSize -> VBFSizeUnit
 decodeBlockLen 0 = vbfBlockSize
 decodeBlockLen l = fromIntegral l
 
+-- | The vbfWithfExtractedEntry applies the given user function to the extracted
+-- VBF enry file described by the function arguments.
+-- Note that the entry data byte is represented as a lazy ByteString.
 vbfWithfExtractedEntry
   :: FilePath
   -> VBFEntry
@@ -41,6 +74,8 @@ vbfWithfExtractedEntry archive entry rg mode act =
   withBinaryFile archive ReadMode
     $ \hdl -> vbfReadEntryContentLazily hdl entry rg mode >>= act
 
+-- | The vbfReadEntryContentLazily extracts the requested VBF entry file and
+-- returns its content lazily.
 vbfReadEntryContentLazily
   :: Handle -> VBFEntry -> EntryRange -> ReadingMode -> IO BSL.ByteString
 vbfReadEntryContentLazily hdl entry rg RawExtraction = do
@@ -83,6 +118,8 @@ fixRange maxLength EntireFile = (0, maxLength)
 fixRange maxLength (PartialFile off bc) =
   (min off maxLength, min bc (maxLength - off))
 
+-- | The vbfContent reads and returns the description of a VBF archive and its
+-- contnt.
 vbfContent :: FilePath -> IO VBFContent
 vbfContent fp = withBinaryFile fp ReadMode go
  where

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 852e38eb6e15c6bd6760ff005387c422584726d4ddec2ce7a1c57f3a9b32d260
+-- hash: 4dd0e32c6d4446e5d7f8d43c217bb605e9ce99d6bdfb967f74cb93207c4e8925
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -28,7 +28,6 @@ library
       System.FileSystem.VBF
       System.FileSystem.VBF.Archive
       System.FileSystem.VBF.Data
-      System.FileSystem.VBF.Internal
       System.FileSystem.VBF.Tree
   other-modules:
       Paths_vbf_fs

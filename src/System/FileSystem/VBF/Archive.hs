@@ -3,25 +3,31 @@
 -- |
 -- Module      : System.FileSystem.VBF.Archive
 -- Description : VBF archive file management
+--
+-- This module exposes functions that relate to the handling of VBF archive
+-- files.
 -----------------------------------------------------------------------------
 module System.FileSystem.VBF.Archive
   (
-  -- * VBF Archive
+  -- * VBF archive
     VBFFileEntry(..)
   , VBFFileInfo(..)
-  , VBFSignature
   , vbfArchiveFileInfo
   , vbfArchiveSignature
-  , vbfBlockDecompress
+
+  -- * VBF block
   , vbfBlockSize
+  , vbfBlockDecompress
   , vbfEntryBlockCount
+  , vbfRawBlockSize
+
+  -- * VBF common functions
   , vbfHashBytes
   , vbfHashSize
   )
 where
 
 import           System.FileSystem.VBF.Data
-import           System.FileSystem.VBF.Internal
 
 import           Codec.Compression.Zlib
 import           Codec.Compression.Zlib.Internal
@@ -35,43 +41,64 @@ import qualified Data.ByteString.Lazy          as BSL
 import qualified Data.Vector                   as Vector
 import           System.IO               hiding ( hGetContents )
 
+-- | A VBF archive file (.vbf) data.
 data VBFFileInfo = VBFFileInfo
     { vbfiHeaderLength :: !VBFHeaderSize
+    -- ^ Size of the header in bytes.
     , vbfiEntries :: !(Vector.Vector VBFFileEntry)
+    -- ^ VBF file entries within the archive file.
     , vbfiHashes :: !(Vector.Vector VBFHash)
+    -- ^ VBF file hashed paths within the archive file.
     , vbfiNameTable :: !BSL.ByteString
+    -- ^ VBF name table, containing the raw file paths.
     , vbfiBlocks :: !(Vector.Vector VBFBlockSize) }
+    -- ^ VBF file data block sizes in bytes.
 
+-- | A file entry within a VBF archive file.
 data VBFFileEntry = VBFFileEntry
     { vbffeStartBlock :: !VBFBlockIndex
+    -- ^ Index of the first block of data in the VBF archive file. 
+    -- All the remaining data blocks will follow the first block.
     , vbffeBytes :: !VBFSizeUnit
+    -- ^ Uncompressed entry file size in bytes.
     , vbffeOffset :: !VBFSizeUnit
+    -- ^ Offset to the entry's first block of data in the VBF archive file.
     , vbffeNameOffset :: !VBFSizeUnit }
+    -- ^ Offset of the file path within the name table in bytes.
 
-type VBFSignature = BS.ByteString
-
+-- | VBF archive signature.
 vbfArchiveSignature :: VBFSignature
 vbfArchiveSignature = "SRYK"
 
+-- | VBF archive data block size in bytes.
 vbfBlockSize :: VBFSizeUnit
 vbfBlockSize = 65536
 
+-- | The vbfBlockDecompress function takes in a compressed data block and
+-- returns its decompressed version.
+--
+-- Failures are thrown InvalidBlockException exceptions.
 vbfBlockDecompress :: BSL.ByteString -> BSL.ByteString
 vbfBlockDecompress = mapException toVBFException . decompress
  where
   toVBFException :: DecompressError -> VBFException
   toVBFException = const (InvalidBlockException CorruptedCompressedBlock)
 
+-- | The vbfHashBytes computes the hash value of the given data.
 vbfHashBytes :: BS.ByteString -> VBFHash
 vbfHashBytes = MD5.hash
 
+-- | Size of a VBF hash value in bytes.
 vbfHashSize :: Int
 vbfHashSize = 16
 
+-- | The vbfEntryBlockCount computes the size of an entry in data blocks.
 vbfEntryBlockCount :: VBFSizeUnit -> VBFBlockIndex
 vbfEntryBlockCount len =
   fromIntegral (len + vbfBlockSize - 1) `div` (fromIntegral vbfBlockSize)
 
+-- | The vbfArchiveFileInfo returns the description of a VBF archive file
+-- using the specified handle.
 vbfArchiveFileInfo :: Handle -> IO VBFFileInfo
 vbfArchiveFileInfo hdl = readHeaderHash >>= readAndValidateFileInfo
  where
@@ -140,3 +167,11 @@ vbfArchiveFileInfo hdl = readHeaderHash >>= readAndValidateFileInfo
                           , vbfiEntries      = fileEntries
                           , vbfiBlocks       = blocks
                           }
+
+-- | The vbfRawBlockSize function takes in a VBF data block and returns its
+-- real size in bytes within the archive. The first parameter is the VBF archive
+-- block size in bytes.
+vbfRawBlockSize :: VBFSizeUnit -> VBFBlock -> VBFSizeUnit
+vbfRawBlockSize _   (CompressedBlock len) = fromIntegral len
+vbfRawBlockSize _   (PartialBlock    len) = fromIntegral len
+vbfRawBlockSize len PassthroughBlock      = len
