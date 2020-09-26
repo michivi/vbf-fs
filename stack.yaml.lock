@@ -6,18 +6,18 @@
 packages:
 - completed:
     cabal-file:
-      size: 1769
-      sha256: 5da7f41abefcd36a841e8abc2963cc53a15081caa44da5b94fc119cf3433f1c1
+      size: 1826
+      sha256: 8e3f232ea1e94f2abea37af699e5804243fbc9063c22a6af21711bd75d14b480
     name: HFuse
     version: 0.2.5.0
     git: https://github.com/michivi/hfuse.git
     pantry-tree:
       size: 469
-      sha256: 8f26d73bfe8dd841d057a9937fca82b37977ad819a2fb33dab88768f9dbbf778
-    commit: c305f26b426680d74b8567ddda5cc10b6db56a03
+      sha256: aad6dcc18b88dc7de6669e85109cacbebc3927885010ba55d7eff0732e025767
+    commit: 96a3c677c50ba3b987d6237c2b0ff7cbe634e78b
   original:
     git: https://github.com/michivi/hfuse.git
-    commit: c305f26b426680d74b8567ddda5cc10b6db56a03
+    commit: 96a3c677c50ba3b987d6237c2b0ff7cbe634e78b
 - completed:
     cabal-file:
       size: 3487

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main
   ( main
   )
@@ -5,13 +6,19 @@ where
 
 import           System.FileSystem.VBF
 
+import           Control.Monad
+import qualified Data.ByteString.Char8         as BS
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
 import           Data.Function
 import           Data.Tree
+import qualified Data.Vector                   as Vector
 import           Options.Applicative
+import           System.Directory
 import           System.Exit
+import           System.FilePath
 import           System.IO
+import           System.ProgressBar
 
 data DumpFormat = ClearTextDump | TsvDump deriving (Eq, Read, Show)
 
@@ -19,6 +26,8 @@ data VBFTool
     = DumpVBFInfo FilePath DumpFormat
     | ExtractEntry FilePath FilePath (Maybe FilePath) ReadingMode (Maybe Integer) (Maybe Integer)
     | TreeVBF FilePath
+    | PackVBF FilePath [FilePath]
+    | UnpackVBF FilePath (Maybe FilePath)
     deriving (Eq, Show)
 
 dumpVbfInfo :: Parser VBFTool
@@ -67,6 +76,28 @@ extractEntry =
 treeVbf :: Parser VBFTool
 treeVbf = TreeVBF <$> argument str (metavar "ARCHIVE")
 
+packVbf :: Parser VBFTool
+packVbf =
+  PackVBF <$> argument str (metavar "ARCHIVE" <> help "Archive path") <*> some
+    (argument
+      str
+      (metavar "FILES..." <> help "Path to the files to add to the archive")
+    )
+
+unpackVbf :: Parser VBFTool
+unpackVbf =
+  UnpackVBF
+    <$> argument str (metavar "ARCHIVE" <> help "Archive path")
+    <*> option
+          (optional str)
+          (  long "output"
+          <> short 'o'
+          <> metavar "OUTPUT"
+          <> value Nothing
+          <> help
+               "Path to the output directory (by default use the name of the archive)"
+          )
+
 vbfTool :: Parser VBFTool
 vbfTool = subparser
   (  command "dump"
@@ -77,7 +108,16 @@ vbfTool = subparser
        )
   <> command "tree"
              (info treeVbf (progDesc "Print a tree of the archive content"))
+  <> command "pack"
+             (info packVbf (progDesc "Pack files into a new VBF archive"))
+  <> command "unpack"
+             (info unpackVbf (progDesc "Unpack the archive to a folder"))
   )
+
+failWithError :: String -> IO ()
+failWithError errMsg = do
+  hPutStrLn stderr errMsg
+  exitWith (ExitFailure 1)
 
 run :: VBFTool -> IO ()
 run (DumpVBFInfo path ClearTextDump) = do
@@ -111,24 +151,69 @@ run (TreeVBF path) = do
   putStrLn $ drawTree (vbfNodeTagName <$> tr)
 run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
   ct <- vbfContent archivePath
-  let notFound = do
-        hPutStrLn stderr ("File '" ++ entryPath ++ "' not found.")
-        exitWith (ExitFailure 1)
-      erg _ Nothing Nothing = EntireFile
-      erg maxlen off len =
-        PartialFile (maybe 0 fromIntegral off) (maybe maxlen fromIntegral len)
-      goExtract ei = do
-        let withOutput =
-              maybe ((&) stdout) (\fp -> withBinaryFile fp WriteMode) outputPath
-        vbfWithfExtractedEntry archivePath
-                               ei
-                               (erg (vbfeSize ei) mboff mblen)
-                               mode
-          $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
-  maybe
-    notFound
-    goExtract
-    (find ((== entryPath) . BSL.unpack . vbfeArchivePath) (vbfcEntries ct))
+  maybe failWithNotFound goExtract $ find matchEntry (vbfcEntries ct)
+ where
+  failWithNotFound  = failWithError ("File '" ++ entryPath ++ "' not found.")
+  requestedPathHash = vbfHashBytes (BS.pack entryPath)
+  matchEntry        = (== requestedPathHash) . vbfeArchivePathHash
+  entryRange _ Nothing Nothing = EntireFile
+  entryRange maxlen off len =
+    PartialFile (maybe 0 fromIntegral off) (maybe maxlen fromIntegral len)
+  withOutput =
+    maybe ((&) stdout) (\fp -> withBinaryFile fp WriteMode) outputPath
+  goExtract ei =
+    vbfWithfExtractedEntry archivePath
+                           ei
+                           (entryRange (vbfeSize ei) mboff mblen)
+                           mode
+      $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
+run (PackVBF archivePath files) = do
+  allFiles <- identifyFiles
+  let reqs = (VBFEntryRequest <$> id <*> id) <$> allFiles
+  vbfCreation archivePath reqs
+ where
+  identifyFiles = concat <$> traverse browse files
+  browse fp = do
+    pathExists <- doesPathExist fp
+    when (not pathExists)
+      $ failWithError ("Path '" ++ fp ++ "' does not exist.")
+    isDir <- doesDirectoryExist fp
+    case isDir of
+      True  -> fmap (fp </>) <$> listDirectory fp >>= filterM doesFileExist
+      False -> return [fp]
+run (UnpackVBF archivePath mbOutputDir) = do
+  ct <- vbfContent archivePath
+  od <- validatedOutputDirOrFail
+  goUnpack ct od
+ where
+  guessOutputDir Nothing  = dropExtensions archivePath
+  guessOutputDir (Just p) = p
+  validatedOutputDirOrFail = do
+    let odir = guessOutputDir mbOutputDir
+
+    pathExists      <- doesPathExist odir
+    directoryExists <- doesDirectoryExist odir
+    when (pathExists && not directoryExists)
+      $ failWithError ("Output path '" ++ odir ++ "' is not a directory.")
+
+    return odir
+  goUnpack ct od = do
+    let entries = vbfcEntries ct
+        cnt     = Vector.length entries
+        pbs     = defStyle { stylePrefix = msg "Unpacking" }
+    pb <- newProgressBar pbs 10 (Progress 0 cnt ())
+    for_ entries $ \entry -> do
+      goExtract entry od
+      incProgress pb 1
+  goExtract entry od = do
+    let fp  = BSL.unpack (vbfeArchivePath entry)
+        dn  = takeDirectory fp
+        odp = od </> dn
+        ofp = od </> fp
+    createDirectoryIfMissing True odp
+    withBinaryFile ofp WriteMode $ \hdl ->
+      vbfWithfExtractedEntry archivePath entry EntireFile Decompression
+        $ \dat -> BSL.hPut hdl dat
 
 opts :: ParserInfo VBFTool
 opts = info (vbfTool <**> helper) idm

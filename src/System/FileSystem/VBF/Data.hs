@@ -19,6 +19,9 @@ module System.FileSystem.VBF.Data
   , VBFContent(..)
   , VBFEntry(..)
 
+  -- * VBF archive creation
+  , VBFEntryRequest(..)
+
   -- * Error management
   , VBFBlockError(..)
   , VBFException(..)
@@ -88,6 +91,13 @@ data VBFEntry = VBFEntry
     -- ^ The entry file's data blocks.
     deriving (Eq, Show)
 
+-- | Request to insert a file into a VBF archive.
+data VBFEntryRequest = VBFEntryRequest
+    { vbferLocalPath :: FilePath
+    -- ^ Path to the file to add in the VBF archive.
+    , vbferEntryPath :: FilePath }
+    -- ^ Path of the file within the VBF archive.
+
 -- | Exceptions that might be thrown during VBF file handling.
 data VBFException
     = InvalidSignatureException
@@ -96,10 +106,14 @@ data VBFException
     -- ^ The VBF file header might have been corrupted (checksums don't match).
     | HeaderTooSmallException
     -- ^ The VBF file header is smaller than expected.
-    | InvalidHeaderException
-    -- ^ The VBF file header doesn't have the expected size.
+    | InvalidHeaderException VBFHeaderSize VBFHeaderSize
+    -- ^ The VBF file header doesn't have the expected size (with the actual
+    -- and expected size)
     | InvalidBlockException VBFBlockError
     -- ^ A VBF data block could not be processed.
+    | IncorrectInputSizeException
+    -- ^ The input data that should have been added to the VBF archive doesn't
+    -- have the expected size.
     deriving (Eq, Show, Typeable)
 
 -- | Data block processing error.

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5c76dd31d210cecb1d97b173c813204beaa6e8a6dba1fa3ffac673ae897d6619
+-- hash: c7d43449ad7369e5fbe06d0049098f1403e0f5f3237963cad025bc08c016ef3a
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -41,8 +41,8 @@ library
     , bytestring
     , containers
     , cryptohash-md5
+    , directory
     , filepath
-    , fused-effects
     , vector
     , zlib
   default-language: Haskell2010
@@ -60,9 +60,10 @@ executable vbf
     , bytestring
     , containers
     , cryptohash-md5
+    , directory
     , filepath
-    , fused-effects
     , optparse-applicative
+    , terminal-progress-bar
     , vbf-fs
     , vector
     , zlib
@@ -84,7 +85,6 @@ executable vbf-fs
     , cryptohash-md5
     , directory
     , filepath
-    , fused-effects
     , optparse-applicative
     , unix
     , vbf-fs
