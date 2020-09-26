@@ -108,8 +108,6 @@ vbfBlockSize = 65536
 
 -- | The 'vbfBlockDecompress' function takes in a compressed data block and
 -- returns its decompressed version.
---
--- Failures are thrown 'InvalidBlockException' exceptions.
 vbfBlockDecompress :: BSL.ByteString -> Maybe BSL.ByteString
 vbfBlockDecompress bs = mfilter (not . BSL.null) $ Just
   (foldDecompressStreamWithInput
@@ -123,8 +121,8 @@ vbfBlockDecompress bs = mfilter (not . BSL.null) $ Just
 -- | The 'vbfBlockCompress' function takes in an uncompressed data block and
 -- returns its compressed version.
 vbfBlockCompress :: BSL.ByteString -> BSL.ByteString
-vbfBlockCompress = compress zlibFormat defaultCompressParams
-  { compressLevel = bestCompression }
+vbfBlockCompress =
+  compress zlibFormat defaultCompressParams { compressLevel = bestCompression }
 
 -- | The 'vbfHashBytes' computes the hash value of the given data.
 vbfHashBytes :: BS.ByteString -> VBFHash
@@ -290,7 +288,10 @@ vbfArchiveCreation hdl as freq fdat = do
     putByteString vbfArchiveSignature
     putWord32le $ fromIntegral headerLen
     putWord64le $ fromIntegral numFiles
-    let doffs = Vector.scanl (+) (fromIntegral headerLen) (sum . fmap (vbfRawBlockSize vbfBlockSize) <$> blks)
+    let doffs = Vector.scanl
+          (+)
+          (fromIntegral headerLen)
+          (sum . fmap (vbfRawBlockSize vbfBlockSize) <$> blks)
     forM_ (vbfHashBytes . BS.pack . vbfferPath <$> entryRequests) putByteString
     Vector.zipWithM_ putEntry doffs (Vector.zip aers entryRequests)
     putWord32le $ fromIntegral nameTableLen + 4
