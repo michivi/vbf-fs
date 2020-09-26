@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : System.FileSystem.VBF.Archive
@@ -28,20 +29,24 @@ module System.FileSystem.VBF.Archive
   -- * VBF common functions
   , vbfHashBytes
   , vbfHashSize
+
+  -- * VBF archive creation
+  , VBFFileEntryRequest(..)
+  , vbfArchiveCreation
   )
 where
 
 import           System.FileSystem.VBF.Data
 
-import           Codec.Compression.Zlib
 import           Codec.Compression.Zlib.Internal
-                                                ( DecompressError )
 import           Control.Exception
 import           Control.Monad
 import qualified Crypto.Hash.MD5               as MD5
 import           Data.Binary.Get
-import qualified Data.ByteString               as BS
+import           Data.Binary.Put
+import qualified Data.ByteString.Char8         as BS
 import qualified Data.ByteString.Lazy          as BSL
+import qualified Data.ByteString.Lazy.Internal as BSL
 import qualified Data.Vector                   as Vector
 import           System.IO               hiding ( hGetContents )
 
@@ -72,6 +77,27 @@ data VBFFileEntry = VBFFileEntry
     -- ^ Offset of the file path within the name table in bytes.
      }
 
+-- | A request to insert a VBF entry file in a VBF archive.
+data VBFFileEntryRequest = VBFFileEntryRequest
+    { vbfferFileSize :: VBFSizeUnit
+    -- ^ Size in bytes of the file to insert.
+    , vbfferPath :: FilePath }
+    -- ^ Path of the file within the VBF archive.
+
+data AccumulatedEntryRequest = AccumulatedEntryRequest
+    { aerNameSectionOffset :: VBFSizeUnit
+    , aerNextDataBlock :: VBFBlockIndex }
+    deriving (Eq, Show)
+
+instance Monoid AccumulatedEntryRequest where
+  mempty = AccumulatedEntryRequest 0 0
+
+instance Semigroup AccumulatedEntryRequest where
+  a <> b = AccumulatedEntryRequest
+    { aerNameSectionOffset = aerNameSectionOffset a + aerNameSectionOffset b
+    , aerNextDataBlock     = aerNextDataBlock a + aerNextDataBlock b
+    }
+
 -- | VBF archive signature.
 vbfArchiveSignature :: VBFSignature
 vbfArchiveSignature = "SRYK"
@@ -84,11 +110,21 @@ vbfBlockSize = 65536
 -- returns its decompressed version.
 --
 -- Failures are thrown 'InvalidBlockException' exceptions.
-vbfBlockDecompress :: BSL.ByteString -> BSL.ByteString
-vbfBlockDecompress = mapException toVBFException . decompress
- where
-  toVBFException :: DecompressError -> VBFException
-  toVBFException = const (InvalidBlockException CorruptedCompressedBlock)
+vbfBlockDecompress :: BSL.ByteString -> Maybe BSL.ByteString
+vbfBlockDecompress bs = mfilter (not . BSL.null) $ Just
+  (foldDecompressStreamWithInput
+    BSL.Chunk
+    (const BSL.Empty)
+    (const BSL.Empty)
+    (decompressST zlibFormat defaultDecompressParams)
+    bs
+  )
+
+-- | The 'vbfBlockCompress' function takes in an uncompressed data block and
+-- returns its compressed version.
+vbfBlockCompress :: BSL.ByteString -> BSL.ByteString
+vbfBlockCompress = compress zlibFormat defaultCompressParams
+  { compressLevel = bestCompression }
 
 -- | The 'vbfHashBytes' computes the hash value of the given data.
 vbfHashBytes :: BS.ByteString -> VBFHash
@@ -170,8 +206,8 @@ vbfArchiveFileInfo hdl = readHeaderHash >>= readAndValidateFileInfo
           sum (fromIntegral . vbfEntryBlockCount . vbffeBytes <$> fileEntries)
     blocks <- Vector.replicateM blockCount getBlock
 
-    pos    <- bytesRead
-    when (fromIntegral pos /= headerLength) $ throw InvalidHeaderException
+    pos    <- fromIntegral <$> bytesRead
+    when (pos /= headerLength) $ throw (InvalidHeaderException pos headerLength)
 
     return $! VBFFileInfo { vbfiHeaderLength = headerLength
                           , vbfiHashes       = hashes
@@ -187,6 +223,89 @@ vbfRawBlockSize :: VBFSizeUnit -> VBFBlock -> VBFSizeUnit
 vbfRawBlockSize _   (CompressedBlock len) = fromIntegral len
 vbfRawBlockSize _   (PartialBlock    len) = fromIntegral len
 vbfRawBlockSize len PassthroughBlock      = len
+
+-- | The 'vbfArchiveCreation' creates a new VBF archive inside the specified
+-- file handle.
+vbfArchiveCreation
+  :: Handle
+  -> [a]
+  -> (a -> VBFFileEntryRequest)
+  -> (a -> IO BSL.ByteString)
+  -> IO ()
+vbfArchiveCreation hdl as freq fdat = do
+  writtenBlocks <- writeDataBlocks
+  hdr           <- writeHeader writtenBlocks
+  writeHeaderSignature hdr
+ where
+  vas           = Vector.fromList as
+  numFiles      = Vector.length vas
+  entryRequests = freq <$> vas
+  aers'         = Vector.scanl (<>) mempty (toAer <$> entryRequests)
+  aers          = Vector.init aers'
+  accAers       = Vector.last aers'
+  toAer (VBFFileEntryRequest bc fp) = AccumulatedEntryRequest
+    { aerNameSectionOffset = fromIntegral (length fp + 1)
+    , aerNextDataBlock     = vbfEntryBlockCount bc
+    }
+  names        = vbfferPath <$> entryRequests
+  nameTableLen = aerNameSectionOffset accAers
+  headerLen =
+    16 + (numFiles * 48) + 4 + fromIntegral nameTableLen + fromIntegral
+      (2 * aerNextDataBlock accAers)
+  writeDataBlocks = do
+    hSeek hdl AbsoluteSeek (fromIntegral headerLen)
+    Vector.zipWithM writeEntryDataBlocks vas entryRequests
+  writeEntryDataBlocks a (VBFFileEntryRequest bc _) = do
+    dat <- BSL.take (fromIntegral bc) <$> fdat a
+    let blks           = Vector.unfoldr splitBlock dat
+        compressedBlks = processSingleBlock <$> blks
+
+    forM_ (snd <$> compressedBlks) $ BSL.hPut hdl
+
+    when (BSL.length dat /= fromIntegral bc)
+      $ throwIO IncorrectInputSizeException
+
+    return $ fst <$> compressedBlks
+  splitBlock (BSL.null -> True) = Nothing
+  splitBlock bs = Just $ BSL.splitAt (fromIntegral vbfBlockSize) bs
+  processSingleBlock bs =
+    let compressed      = vbfBlockCompress bs
+        compressedLen   = BSL.length compressed
+        uncompressedLen = BSL.length bs
+        blkSize         = fromIntegral vbfBlockSize
+    in  case (compressedLen, uncompressedLen) of
+          (c, u) | c < u       -> (CompressedBlock (fromIntegral c), compressed)
+          (_, u) | u < blkSize -> (PartialBlock (fromIntegral u), bs)
+          _                    -> (PassthroughBlock, bs)
+  writeHeader blks = do
+    hSeek hdl AbsoluteSeek 0
+    let hdr = runPut (putHeader blks)
+    BSL.hPut hdl hdr
+    return $ BSL.toStrict hdr
+  writeHeaderSignature hdr = do
+    let hash = vbfHashBytes hdr
+    hSeek hdl SeekFromEnd 0
+    BS.hPut hdl hash
+  putHeader blks = do
+    putByteString vbfArchiveSignature
+    putWord32le $ fromIntegral headerLen
+    putWord64le $ fromIntegral numFiles
+    let doffs = Vector.scanl (+) (fromIntegral headerLen) (sum . fmap (vbfRawBlockSize vbfBlockSize) <$> blks)
+    forM_ (vbfHashBytes . BS.pack . vbfferPath <$> entryRequests) putByteString
+    Vector.zipWithM_ putEntry doffs (Vector.zip aers entryRequests)
+    putWord32le $ fromIntegral nameTableLen + 4
+    forM_ names $ \name -> putByteString (BS.pack name) *> putWord8 0
+    forM_ (join blks) putBlock
+  putEntry doff (AccumulatedEntryRequest nso dblk, VBFFileEntryRequest bc _) =
+    do
+      putWord32le dblk
+      putWord32le 0
+      putWord64le bc
+      putWord64le doff
+      putWord64le nso
+  putBlock (CompressedBlock bc) = putWord16le bc
+  putBlock (PartialBlock    bc) = putWord16le bc
+  putBlock PassthroughBlock     = putWord16le 0
 
 -- $vbfArchive
 --

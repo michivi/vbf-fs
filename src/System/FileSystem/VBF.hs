@@ -23,11 +23,16 @@ module System.FileSystem.VBF
   ( module System.FileSystem.VBF.Archive
   , module System.FileSystem.VBF.Data
   , module System.FileSystem.VBF.Tree
+
+  -- * VBF exploration
   , EntryRange(..)
   , ReadingMode(..)
   , vbfContent
   , vbfReadEntryContentLazily
   , vbfWithfExtractedEntry
+
+  -- * VBF creation
+  , vbfCreation
   )
 where
 
@@ -35,9 +40,13 @@ import           System.FileSystem.VBF.Archive
 import           System.FileSystem.VBF.Data
 import           System.FileSystem.VBF.Tree
 
+import           Control.Exception
+import           Control.Monad
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import qualified Data.Vector                   as Vector
 import           Data.Word
+import           System.Directory
+import           System.FilePath
 import           System.IO               hiding ( hGetContents )
 
 -- | Range of bytes in a VBF archive or file. This is mainly used to indicate
@@ -90,8 +99,8 @@ vbfReadEntryContentLazily hdl entry rg RawExtraction = do
   (ctOff, ctLen)  = fixRange maxLength rg
   actualVbfOffset = fromIntegral (vbfEntryOff + ctOff)
 vbfReadEntryContentLazily hdl entry rg Decompression = do
-  archivedBlocks <- traverse fetchBlock blockInfos
-  let processedBlocks = Vector.map (uncurry processBlock) archivedBlocks
+  archivedBlocks  <- traverse fetchBlock blockInfos
+  processedBlocks <- Vector.mapM (uncurry processBlock) archivedBlocks
   return
     $ BSL.take (fromIntegral ctLen)
     $ BSL.drop (fromIntegral skippedAlignedBytesCount)
@@ -112,9 +121,12 @@ vbfReadEntryContentLazily hdl entry rg Decompression = do
     bs <- BSL.hGet hdl (fromIntegral $ vbfRawBlockSize vbfBlockSize blk)
     return (blk, bs)
 
-  processBlock PassthroughBlock      bs = bs
-  processBlock (PartialBlock    len) bs = (BSL.take (fromIntegral len) bs)
-  processBlock (CompressedBlock _  ) bs = vbfBlockDecompress bs
+  processBlock PassthroughBlock      bs = pure bs
+  processBlock (PartialBlock    len) bs = pure (BSL.take (fromIntegral len) bs)
+  processBlock (CompressedBlock _  ) bs = maybe
+    (throwIO $ InvalidBlockException CorruptedCompressedBlock)
+    pure
+    (vbfBlockDecompress bs)
 
 fixRange :: VBFSizeUnit -> EntryRange -> (VBFSizeUnit, VBFSizeUnit)
 fixRange maxLength EntireFile = (0, maxLength)
@@ -176,3 +188,16 @@ vbfContent fp = withBinaryFile fp ReadMode go
     | blkLen == 0                           = PassthroughBlock
     | lstBlk == idx && blkLen == unalBlkLen = PartialBlock blkLen
     | otherwise                             = CompressedBlock blkLen
+
+-- | The 'vbfCreation' creates a new VBF archive at the specified path with the
+-- requested files inside.
+vbfCreation :: FilePath -> [VBFEntryRequest] -> IO ()
+vbfCreation fp reqs = withBinaryFile fp WriteMode $ \hdl -> do
+  insertReqs <- traverse (liftM2 (,) <$> pure <*> toFileEntryRequest) reqs
+  vbfArchiveCreation hdl insertReqs snd fetchFile
+ where
+  toFileEntryRequest (VBFEntryRequest lfp afp) = do
+    size <- getFileSize lfp
+    let nafp = dropWhile (== '/') (normalise afp)
+    return $ VBFFileEntryRequest (fromIntegral size) nafp
+  fetchFile (VBFEntryRequest lfp _, _) = BSL.readFile lfp

@@ -26,6 +26,7 @@ data VBFTool
     = DumpVBFInfo FilePath DumpFormat
     | ExtractEntry FilePath FilePath (Maybe FilePath) ReadingMode (Maybe Integer) (Maybe Integer)
     | TreeVBF FilePath
+    | PackVBF FilePath [FilePath]
     | UnpackVBF FilePath (Maybe FilePath)
     deriving (Eq, Show)
 
@@ -75,6 +76,14 @@ extractEntry =
 treeVbf :: Parser VBFTool
 treeVbf = TreeVBF <$> argument str (metavar "ARCHIVE")
 
+packVbf :: Parser VBFTool
+packVbf =
+  PackVBF <$> argument str (metavar "ARCHIVE" <> help "Archive path") <*> some
+    (argument
+      str
+      (metavar "FILES..." <> help "Path to the files to add to the archive")
+    )
+
 unpackVbf :: Parser VBFTool
 unpackVbf =
   UnpackVBF
@@ -99,6 +108,8 @@ vbfTool = subparser
        )
   <> command "tree"
              (info treeVbf (progDesc "Print a tree of the archive content"))
+  <> command "pack"
+             (info packVbf (progDesc "Pack files into a new VBF archive"))
   <> command "unpack"
              (info unpackVbf (progDesc "Unpack the archive to a folder"))
   )
@@ -156,6 +167,20 @@ run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
                            (entryRange (vbfeSize ei) mboff mblen)
                            mode
       $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
+run (PackVBF archivePath files) = do
+  allFiles <- identifyFiles
+  let reqs = (VBFEntryRequest <$> id <*> id) <$> allFiles
+  vbfCreation archivePath reqs
+ where
+  identifyFiles = concat <$> traverse browse files
+  browse fp = do
+    pathExists <- doesPathExist fp
+    when (not pathExists)
+      $ failWithError ("Path '" ++ fp ++ "' does not exist.")
+    isDir <- doesDirectoryExist fp
+    case isDir of
+      True  -> fmap (fp </>) <$> listDirectory fp >>= filterM doesFileExist
+      False -> return [fp]
 run (UnpackVBF archivePath mbOutputDir) = do
   ct <- vbfContent archivePath
   od <- validatedOutputDirOrFail

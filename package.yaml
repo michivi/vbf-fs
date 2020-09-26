@@ -24,6 +24,7 @@ dependencies:
   - bytestring
   - containers
   - cryptohash-md5
+  - directory
   - filepath
   - vector
   - zlib
@@ -47,7 +48,6 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - directory
       - optparse-applicative
       - terminal-progress-bar
       - vbf-fs
@@ -61,7 +61,6 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - HFuse
-      - directory
       - optparse-applicative
       - unix
       - vbf-fs
