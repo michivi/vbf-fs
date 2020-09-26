@@ -41,3 +41,5 @@ cabal.project.local~
 .history
 
 # End of https://www.toptal.com/developers/gitignore/api/haskell,visualstudiocode
+
+build
