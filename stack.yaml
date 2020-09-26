@@ -7,6 +7,3 @@ extra-deps:
   - git: https://github.com/michivi/hfuse.git
     commit: 96a3c677c50ba3b987d6237c2b0ff7cbe634e78b
     # nix-sha256: 1a50ghxkv6hlcavh8rd1c1hffc8f28wpmz5kfn0kmzs09j5fpmsv
-  - git: https://github.com/GaloisInc/pure-zlib.git
-    commit: 813b6d3160994feee3e0b094e214eed0d5159e92
-    # nix-sha256: 0s3dsq6dw4lc3b39qbd9bia87lif9iaqcdc8z3jbhqw2fan7sggx

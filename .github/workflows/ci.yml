@@ -7,7 +7,7 @@ on:
     branches: [master]
 
 jobs:
-  stack-linux:
+  stack:
     name: ${{ matrix.os }} / ghc ${{ matrix.ghc }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -24,7 +24,8 @@ jobs:
           - "8.10.1"
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Clone project
+        uses: actions/checkout@v2
 
       - name: Install dependencies on OSX
         if: matrix.os == 'macOS-latest'
@@ -34,13 +35,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install zlib1g-dev libfuse-dev
 
+      - name: Cache Stack dependencies
+        uses: actions/cache@v1
+        with:
+          path: ~/.stack
+          key: ${{ runner.os }}-${{ matrix.ghc }}-stack-${{ hashFiles('stack.yaml') }}
+
       - uses: actions/setup-haskell@v1.1
         with:
           ghc-version: ${{ matrix.ghc }}
           stack-version: ${{ matrix.stack }}
 
       - name: Stack Build
-        run: stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks
+        run: stack build --system-ghc --ghc-options=-O2 --test --bench --no-run-tests --no-run-benchmarks
 
       - name: Stack Test
         run: stack test --system-ghc

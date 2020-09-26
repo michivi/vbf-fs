@@ -25,7 +25,6 @@ dependencies:
   - containers
   - cryptohash-md5
   - filepath
-  - fused-effects
   - vector
   - zlib
 

@@ -12,7 +12,6 @@ module System.FileSystem.VBF.Archive
   -- * VBF archive file
 
   -- $vbfArchive
-
     VBFFileInfo(..)
   , vbfArchiveFileInfo
   , vbfArchiveSignature

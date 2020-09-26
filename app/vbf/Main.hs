@@ -5,6 +5,7 @@ where
 
 import           System.FileSystem.VBF
 
+import qualified Data.ByteString.Char8         as BS
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
 import           Data.Function
@@ -111,24 +112,24 @@ run (TreeVBF path) = do
   putStrLn $ drawTree (vbfNodeTagName <$> tr)
 run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
   ct <- vbfContent archivePath
-  let notFound = do
-        hPutStrLn stderr ("File '" ++ entryPath ++ "' not found.")
-        exitWith (ExitFailure 1)
-      erg _ Nothing Nothing = EntireFile
-      erg maxlen off len =
-        PartialFile (maybe 0 fromIntegral off) (maybe maxlen fromIntegral len)
-      goExtract ei = do
-        let withOutput =
-              maybe ((&) stdout) (\fp -> withBinaryFile fp WriteMode) outputPath
-        vbfWithfExtractedEntry archivePath
-                               ei
-                               (erg (vbfeSize ei) mboff mblen)
-                               mode
-          $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
-  maybe
-    notFound
-    goExtract
-    (find ((== entryPath) . BSL.unpack . vbfeArchivePath) (vbfcEntries ct))
+  maybe failWithNotFound goExtract $ find matchEntry (vbfcEntries ct)
+ where
+  failWithNotFound = do
+    hPutStrLn stderr ("File '" ++ entryPath ++ "' not found.")
+    exitWith (ExitFailure 1)
+  requestedPathHash = vbfHashBytes (BS.pack entryPath)
+  matchEntry        = (== requestedPathHash) . vbfeArchivePathHash
+  entryRange _ Nothing Nothing = EntireFile
+  entryRange maxlen off len =
+    PartialFile (maybe 0 fromIntegral off) (maybe maxlen fromIntegral len)
+  withOutput =
+    maybe ((&) stdout) (\fp -> withBinaryFile fp WriteMode) outputPath
+  goExtract ei =
+    vbfWithfExtractedEntry archivePath
+                           ei
+                           (entryRange (vbfeSize ei) mboff mblen)
+                           mode
+      $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
 
 opts :: ParserInfo VBFTool
 opts = info (vbfTool <**> helper) idm
