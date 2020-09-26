@@ -47,7 +47,9 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
+      - directory
       - optparse-applicative
+      - terminal-progress-bar
       - vbf-fs
 
   vbf-fs:

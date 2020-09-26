@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 005ffe2cb21ef546295fc13f30943286ebfbab137f6ce95a3cebaf76cb25c48e
+-- hash: bc0670d5e7566a4a5d60117c0108f0c9830f33bf06a373f09b12b956875196a3
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -59,8 +59,10 @@ executable vbf
     , bytestring
     , containers
     , cryptohash-md5
+    , directory
     , filepath
     , optparse-applicative
+    , terminal-progress-bar
     , vbf-fs
     , vector
     , zlib
