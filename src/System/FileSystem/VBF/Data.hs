@@ -5,7 +5,7 @@
 -----------------------------------------------------------------------------
 module System.FileSystem.VBF.Data
   (
-  -- * VBF common data types and functions
+  -- * Common data types and functions
     VBFBlockIndex
   , VBFBlockSize
   , VBFHeaderSize

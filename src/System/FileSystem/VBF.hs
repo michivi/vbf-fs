@@ -15,7 +15,9 @@
 --
 -- Errors are represented as exceptions. Even though a pure version would have
 -- been preferrable, this is primarily a quick fun toy project, and some
--- sacrifices were made.
+-- sacrifices were made. So 'VBFException's might get thrown by some functions.
+-- Also be aware that lazy 'ByteString's are used. Related I/O errors are not
+-- catched by the library.
 -----------------------------------------------------------------------------
 module System.FileSystem.VBF
   ( module System.FileSystem.VBF.Archive
@@ -38,7 +40,8 @@ import qualified Data.Vector                   as Vector
 import           Data.Word
 import           System.IO               hiding ( hGetContents )
 
--- | Range of bytes to extract.
+-- | Range of bytes in a VBF archive or file. This is mainly used to indicate
+-- whether a whole file should be processed, or only a small portion of it.
 data EntryRange
   = EntireFile
   -- ^ The entire file should be extracted.
@@ -60,9 +63,9 @@ decodeBlockLen :: VBFBlockSize -> VBFSizeUnit
 decodeBlockLen 0 = vbfBlockSize
 decodeBlockLen l = fromIntegral l
 
--- | The vbfWithfExtractedEntry applies the given user function to the extracted
--- VBF enry file described by the function arguments.
--- Note that the entry data byte is represented as a lazy ByteString.
+-- | The 'vbfWithfExtractedEntry' applies the given user function to the
+-- extracted VBF enry file described by the function arguments.
+-- Note that the entry data byte is represented as a lazy 'ByteString'.
 vbfWithfExtractedEntry
   :: FilePath
   -> VBFEntry
@@ -74,7 +77,7 @@ vbfWithfExtractedEntry archive entry rg mode act =
   withBinaryFile archive ReadMode
     $ \hdl -> vbfReadEntryContentLazily hdl entry rg mode >>= act
 
--- | The vbfReadEntryContentLazily extracts the requested VBF entry file and
+-- | The 'vbfReadEntryContentLazily' extracts the requested VBF entry file and
 -- returns its content lazily.
 vbfReadEntryContentLazily
   :: Handle -> VBFEntry -> EntryRange -> ReadingMode -> IO BSL.ByteString
@@ -118,8 +121,8 @@ fixRange maxLength EntireFile = (0, maxLength)
 fixRange maxLength (PartialFile off bc) =
   (min off maxLength, min bc (maxLength - off))
 
--- | The vbfContent reads and returns the description of a VBF archive and its
--- contnt.
+-- | The 'vbfContent' reads and returns the description of a VBF archive and its
+-- content.
 vbfContent :: FilePath -> IO VBFContent
 vbfContent fp = withBinaryFile fp ReadMode go
  where

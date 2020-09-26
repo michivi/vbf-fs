@@ -4,11 +4,12 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4dd0e32c6d4446e5d7f8d43c217bb605e9ce99d6bdfb967f74cb93207c4e8925
+-- hash: 5c76dd31d210cecb1d97b173c813204beaa6e8a6dba1fa3ffac673ae897d6619
 
 name:           vbf-fs
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/michivi/vbf-fs#readme>
+description:    This package contains operations and data types for handling VBF archives. Those archives are used in various video games to store assets such as graphics, sound or videos.
+                Please see the README on GitHub at <https://github.com/michivi/vbf-fs#readme>
 homepage:       https://github.com/michivi/vbf-fs#readme
 bug-reports:    https://github.com/michivi/vbf-fs/issues
 author:         Michivi
@@ -89,4 +90,6 @@ executable vbf-fs
     , vbf-fs
     , vector
     , zlib
+  if os(windows)
+    buildable: False
   default-language: Haskell2010

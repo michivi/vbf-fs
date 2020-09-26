@@ -9,11 +9,16 @@
 -----------------------------------------------------------------------------
 module System.FileSystem.VBF.Archive
   (
-  -- * VBF archive
-    VBFFileEntry(..)
-  , VBFFileInfo(..)
+  -- * VBF archive file
+
+  -- $vbfArchive
+
+    VBFFileInfo(..)
   , vbfArchiveFileInfo
   , vbfArchiveSignature
+
+  -- * VBF file entry
+  , VBFFileEntry(..)
 
   -- * VBF block
   , vbfBlockSize
@@ -41,7 +46,7 @@ import qualified Data.ByteString.Lazy          as BSL
 import qualified Data.Vector                   as Vector
 import           System.IO               hiding ( hGetContents )
 
--- | A VBF archive file (.vbf) data.
+-- | A VBF archive file (.vbf) header data.
 data VBFFileInfo = VBFFileInfo
     { vbfiHeaderLength :: !VBFHeaderSize
     -- ^ Size of the header in bytes.
@@ -51,8 +56,9 @@ data VBFFileInfo = VBFFileInfo
     -- ^ VBF file hashed paths within the archive file.
     , vbfiNameTable :: !BSL.ByteString
     -- ^ VBF name table, containing the raw file paths.
-    , vbfiBlocks :: !(Vector.Vector VBFBlockSize) }
+    , vbfiBlocks :: !(Vector.Vector VBFBlockSize)
     -- ^ VBF file data block sizes in bytes.
+     }
 
 -- | A file entry within a VBF archive file.
 data VBFFileEntry = VBFFileEntry
@@ -63,8 +69,9 @@ data VBFFileEntry = VBFFileEntry
     -- ^ Uncompressed entry file size in bytes.
     , vbffeOffset :: !VBFSizeUnit
     -- ^ Offset to the entry's first block of data in the VBF archive file.
-    , vbffeNameOffset :: !VBFSizeUnit }
+    , vbffeNameOffset :: !VBFSizeUnit
     -- ^ Offset of the file path within the name table in bytes.
+     }
 
 -- | VBF archive signature.
 vbfArchiveSignature :: VBFSignature
@@ -74,17 +81,17 @@ vbfArchiveSignature = "SRYK"
 vbfBlockSize :: VBFSizeUnit
 vbfBlockSize = 65536
 
--- | The vbfBlockDecompress function takes in a compressed data block and
+-- | The 'vbfBlockDecompress' function takes in a compressed data block and
 -- returns its decompressed version.
 --
--- Failures are thrown InvalidBlockException exceptions.
+-- Failures are thrown 'InvalidBlockException' exceptions.
 vbfBlockDecompress :: BSL.ByteString -> BSL.ByteString
 vbfBlockDecompress = mapException toVBFException . decompress
  where
   toVBFException :: DecompressError -> VBFException
   toVBFException = const (InvalidBlockException CorruptedCompressedBlock)
 
--- | The vbfHashBytes computes the hash value of the given data.
+-- | The 'vbfHashBytes' computes the hash value of the given data.
 vbfHashBytes :: BS.ByteString -> VBFHash
 vbfHashBytes = MD5.hash
 
@@ -92,13 +99,19 @@ vbfHashBytes = MD5.hash
 vbfHashSize :: Int
 vbfHashSize = 16
 
--- | The vbfEntryBlockCount computes the size of an entry in data blocks.
+-- | The 'vbfEntryBlockCount' computes the size of an entry in data blocks.
 vbfEntryBlockCount :: VBFSizeUnit -> VBFBlockIndex
 vbfEntryBlockCount len =
   fromIntegral (len + vbfBlockSize - 1) `div` (fromIntegral vbfBlockSize)
 
--- | The vbfArchiveFileInfo returns the description of a VBF archive file
+-- | The 'vbfArchiveFileInfo' returns the description of a VBF archive file
 -- using the specified handle.
+--
+-- @
+-- processed = withBinaryFile fp ReadMode doSomething
+-- 
+-- doSomething hdl = vbfArchiveFileInfo hdl >>= process
+-- @
 vbfArchiveFileInfo :: Handle -> IO VBFFileInfo
 vbfArchiveFileInfo hdl = readHeaderHash >>= readAndValidateFileInfo
  where
@@ -168,10 +181,29 @@ vbfArchiveFileInfo hdl = readHeaderHash >>= readAndValidateFileInfo
                           , vbfiBlocks       = blocks
                           }
 
--- | The vbfRawBlockSize function takes in a VBF data block and returns its
+-- | The 'vbfRawBlockSize' function takes in a VBF data block and returns its
 -- real size in bytes within the archive. The first parameter is the VBF archive
 -- block size in bytes.
 vbfRawBlockSize :: VBFSizeUnit -> VBFBlock -> VBFSizeUnit
 vbfRawBlockSize _   (CompressedBlock len) = fromIntegral len
 vbfRawBlockSize _   (PartialBlock    len) = fromIntegral len
 vbfRawBlockSize len PassthroughBlock      = len
+
+-- $vbfArchive
+--
+-- A VBF archive file contains the three following sections:
+--
+--   1. The header
+--   2. The data blocks
+--   3. The hash code of the header
+--
+-- The header itself (represented by 'VBFFileInfo') contains the three following
+-- main sections:
+--
+--   1. A hash table, containing the hash code of each file path
+--   2. An entry table, each entry representing a file (see 'VBFFileEntry')
+--   3. A name table, containing the full path of each file
+--   4. A table of 16 bits integer, representing the size of each data block
+--
+-- Each data block can be compressed individually.
+--
