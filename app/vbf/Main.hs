@@ -184,7 +184,8 @@ run (PackVBF archivePath files) = do
       $ failWithError ("Path '" ++ fp ++ "' does not exist.")
     isDir <- doesDirectoryExist fp
     case isDir of
-      True  -> fmap (fp </>) <$> listDirectory fp >>= filterM doesFileExist
+      True ->
+        fmap (fp </>) <$> listDirectory fp >>= fmap join . traverse browse
       False -> return [fp]
 run (UnpackVBF archivePath mbOutputDir) = do
   ct <- vbfContent archivePath
