@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c7d43449ad7369e5fbe06d0049098f1403e0f5f3237963cad025bc08c016ef3a
+-- hash: 0989e9dc7413b367f24a7c2e76d17da847251333713da86e2c625acf04ea5183
 
 name:           vbf-fs
 version:        0.1.0.0
@@ -92,4 +92,28 @@ executable vbf-fs
     , zlib
   if os(windows)
     buildable: False
+  default-language: Haskell2010
+
+test-suite vbf-fs-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      System.FileSystem.VBFSpec
+      Paths_vbf_fs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      QuickCheck
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , containers
+    , cryptohash-md5
+    , directory
+    , filepath
+    , hspec
+    , vbf-fs
+    , vector
+    , zlib
   default-language: Haskell2010

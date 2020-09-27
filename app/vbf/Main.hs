@@ -11,6 +11,7 @@ import qualified Data.ByteString.Char8         as BS
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
 import           Data.Function
+import           Data.Maybe
 import           Data.Tree
 import qualified Data.Vector                   as Vector
 import           Options.Applicative
@@ -169,7 +170,10 @@ run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
       $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
 run (PackVBF archivePath files) = do
   allFiles <- identifyFiles
-  let reqs = (VBFEntryRequest <$> id <*> id) <$> allFiles
+  let reqs =
+        catMaybes
+          $   (liftM2 VBFEntryRequest <$> pure <*> osPathToVbfPath)
+          <$> allFiles
   vbfCreation archivePath reqs
  where
   identifyFiles = concat <$> traverse browse files
@@ -206,7 +210,7 @@ run (UnpackVBF archivePath mbOutputDir) = do
       goExtract entry od
       incProgress pb 1
   goExtract entry od = do
-    let fp  = BSL.unpack (vbfeArchivePath entry)
+    let fp  = vbfPathToOsPath (BSL.unpack $ vbfeArchivePath entry)
         dn  = takeDirectory fp
         odp = od </> dn
         ofp = od </> fp
