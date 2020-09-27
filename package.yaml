@@ -69,3 +69,15 @@ executables:
         buildable: False
         # No fuse on Windows.
 
+tests:
+  vbf-fs-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - QuickCheck
+      - hspec
+      - vbf-fs

@@ -44,11 +44,12 @@ in
       alias "b"="cabal new-build"
       alias "c"="hpack && cabal new-configure"
       alias "d"="cabal haddock"
-      alias "f"="(find app -name '*.hs' ; find src -name '*.hs') | xargs -n1 brittany --write-mode=inplace"
+      alias "f"="(find app -name '*.hs' ; find src -name '*.hs' ; find test -name '*.hs') | xargs -n1 brittany --write-mode=inplace"
       alias "l"="hlint -h .hlint.yaml ."
       alias "lr"="hlint -h .hlint.yaml --report ."
       alias "r"="$VBF_APP"
       alias "rf"="$VBFFS_APP"
+      alias "t"="cabal new-test"
     '';
 
     exactDeps = true;

@@ -32,6 +32,8 @@ VBF archives can be fully unpacked and repacked as well. Repacking does include 
 
 A FUSE program that can be used on Unix-like OS to mount an archive as a regular (read-only) file-system.
 
+libfuse is required on Linux OS, and osxfuse on OS X.
+
 The following command will mount the VBF archive `/tmp/test.vbf` to `/mnt/tmp`:
 
 ```bash

@@ -33,6 +33,10 @@ module System.FileSystem.VBF
 
   -- * VBF creation
   , vbfCreation
+
+  -- * VBF paths
+  , osPathToVbfPath
+  , vbfPathToOsPath
   )
 where
 
@@ -198,6 +202,25 @@ vbfCreation fp reqs = withBinaryFile fp WriteMode $ \hdl -> do
  where
   toFileEntryRequest (VBFEntryRequest lfp afp) = do
     size <- getFileSize lfp
-    let nafp = dropWhile (== '/') (normalise afp)
-    return $ VBFFileEntryRequest (fromIntegral size) nafp
+    return $ VBFFileEntryRequest (fromIntegral size) afp
   fetchFile (VBFEntryRequest lfp _, _) = BSL.readFile lfp
+
+-- | The 'osPathToVbfPath' converts a path from the current OS to VBF path.
+osPathToVbfPath :: FilePath -> Maybe FilePath
+osPathToVbfPath "" = Nothing
+osPathToVbfPath fp =
+  Just $ removeTrailingSeparators $ removeLeadingSeparators $ convertPath fp
+ where
+  convertPath = map sepMapper . normalise
+  sepMapper c | c == pathSeparator = vbfPathSeparator
+              | otherwise          = c
+  removeLeadingSeparators  = dropWhile (== vbfPathSeparator)
+  removeTrailingSeparators = reverse . removeLeadingSeparators . reverse
+
+-- | The 'vbfPathToOsPath' converts a VBF path into a path for the current OS.
+vbfPathToOsPath :: FilePath -> FilePath
+vbfPathToOsPath "" = ""
+vbfPathToOsPath fp = map sepMapper fp
+ where
+  sepMapper c | c == vbfPathSeparator = pathSeparator
+              | otherwise             = c

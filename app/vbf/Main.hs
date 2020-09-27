@@ -11,6 +11,8 @@ import qualified Data.ByteString.Char8         as BS
 import qualified Data.ByteString.Lazy.Char8    as BSL
 import           Data.Foldable
 import           Data.Function
+import           Data.List
+import           Data.Maybe
 import           Data.Tree
 import qualified Data.Vector                   as Vector
 import           Options.Applicative
@@ -126,25 +128,25 @@ run (DumpVBFInfo path ClearTextDump) = do
   putStrLn $ "Blocks: " ++ show (vbfcBlockCount ct)
   putStrLn $ "Files:"
   for_ (vbfcEntries ct) $ \entry -> do
-    putStrLn
-      $  "- "
-      ++ BSL.unpack (vbfeArchivePath entry)
-      ++ " ("
-      ++ show (vbfeSize entry)
-      ++ "b at "
-      ++ show (vbfeOffset entry)
-      ++ ")"
+    putStrLn $ concat
+      [ "- "
+      , BSL.unpack (vbfeArchivePath entry)
+      , " ("
+      , show (vbfeSize entry)
+      , "b at "
+      , show (vbfeOffset entry)
+      , ")"
+      ]
 run (DumpVBFInfo path TsvDump) = do
   ct <- vbfContent path
   for_ (vbfcEntries ct) $ \entry -> do
-    putStrLn
-      $  BSL.unpack (vbfeArchivePath entry)
-      ++ "\t"
-      ++ show (vbfeSize entry)
-      ++ "\t"
-      ++ show (vbfeCompressedSize entry)
-      ++ "\t"
-      ++ show (vbfeOffset entry)
+    putStrLn $ intercalate
+      "\t"
+      [ BSL.unpack (vbfeArchivePath entry)
+      , show (vbfeSize entry)
+      , show (vbfeCompressedSize entry)
+      , show (vbfeOffset entry)
+      ]
 run (TreeVBF path) = do
   ct <- vbfContent path
   let tr = vbfContentTree ct
@@ -169,7 +171,10 @@ run (ExtractEntry archivePath entryPath outputPath mode mboff mblen) = do
       $ \dat -> withOutput $ \hdl -> BSL.hPut hdl dat
 run (PackVBF archivePath files) = do
   allFiles <- identifyFiles
-  let reqs = (VBFEntryRequest <$> id <*> id) <$> allFiles
+  let reqs =
+        catMaybes
+          $   (liftM2 VBFEntryRequest <$> pure <*> osPathToVbfPath)
+          <$> allFiles
   vbfCreation archivePath reqs
  where
   identifyFiles = concat <$> traverse browse files
@@ -179,7 +184,8 @@ run (PackVBF archivePath files) = do
       $ failWithError ("Path '" ++ fp ++ "' does not exist.")
     isDir <- doesDirectoryExist fp
     case isDir of
-      True  -> fmap (fp </>) <$> listDirectory fp >>= filterM doesFileExist
+      True ->
+        fmap (fp </>) <$> listDirectory fp >>= fmap join . traverse browse
       False -> return [fp]
 run (UnpackVBF archivePath mbOutputDir) = do
   ct <- vbfContent archivePath
@@ -206,7 +212,7 @@ run (UnpackVBF archivePath mbOutputDir) = do
       goExtract entry od
       incProgress pb 1
   goExtract entry od = do
-    let fp  = BSL.unpack (vbfeArchivePath entry)
+    let fp  = vbfPathToOsPath (BSL.unpack $ vbfeArchivePath entry)
         dn  = takeDirectory fp
         odp = od </> dn
         ofp = od </> fp
