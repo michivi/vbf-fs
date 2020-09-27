@@ -7,3 +7,10 @@ extra-deps:
   - git: https://github.com/michivi/hfuse.git
     commit: 96a3c677c50ba3b987d6237c2b0ff7cbe634e78b
     # nix-sha256: 1a50ghxkv6hlcavh8rd1c1hffc8f28wpmz5kfn0kmzs09j5fpmsv
+
+docker:
+  enable: false
+  image: michivi/vbf-fs-stack:latest
+
+nix:
+  packages: [fuse, zlib]
