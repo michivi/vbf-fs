@@ -1,21 +1,24 @@
-cabal-version: 1.12
+cabal-version: 2.2
 
 -- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0989e9dc7413b367f24a7c2e76d17da847251333713da86e2c625acf04ea5183
+-- hash: 4efe1d5e1d7bcfa5395b05783190fd496526f27af6b95f0e32c33fe07cdaaa3f
 
 name:           vbf-fs
 version:        0.1.0.0
+synopsis:       A VBF archive file management tool
 description:    This package contains operations and data types for handling VBF archives. Those archives are used in various video games to store assets such as graphics, sound or videos.
                 Please see the README on GitHub at <https://github.com/michivi/vbf-fs#readme>
+category:       Archive
 homepage:       https://github.com/michivi/vbf-fs#readme
 bug-reports:    https://github.com/michivi/vbf-fs/issues
 author:         Michivi
 maintainer:     webmaster@michivi.com
 copyright:      2020 Michivi
-license:        MIT
+license:        BSD-3-Clause
+license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     README.md

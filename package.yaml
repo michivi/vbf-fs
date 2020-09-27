@@ -2,10 +2,12 @@
 name: vbf-fs
 version: 0.1.0.0
 github: "michivi/vbf-fs"
-license: MIT
+license: BSD-3-Clause
 author: "Michivi"
 maintainer: "webmaster@michivi.com"
 copyright: "2020 Michivi"
+category: Archive
+synopsis: A VBF archive file management tool
 
 extra-source-files:
   - README.md
